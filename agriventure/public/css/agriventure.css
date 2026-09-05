@@ -1,0 +1,913 @@
+body.ag-portal-active .navbar,
+body.ag-portal-active .page-head,
+body.ag-portal-active .layout-side-section { display:none!important }
+body.ag-portal-active .page-container,
+body.ag-portal-active .layout-main-section-wrapper,
+body.ag-portal-active .layout-main-section,
+body.ag-portal-active .page-body,
+body.ag-portal-active .page-content { margin:0!important;padding:0!important;max-width:none!important;width:100%!important }
+body.ag-portal-active .layout-main-section { border:0!important;border-radius:0!important;background:transparent!important }
+body.ag-portal-active { overflow:hidden }
+
+.agriventure-app{--ag-bg:#f3f4f7;--ag-panel:#fff;--ag-border:#dfe3eb;--ag-text:#202638;--ag-muted:#7d879c;--ag-primary:#5b45e8;--ag-primary-soft:#eeebff;--ag-teal:#0c9d87;--ag-teal-soft:#e4f5f1;--ag-amber:#b77b13;--ag-amber-soft:#fff3d9;--ag-red:#c94459;--ag-red-soft:#ffedf0;--ag-sidebar:232px;--ag-shadow:0 12px 28px rgba(32,38,56,.055);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ag-text);background:var(--ag-bg);height:100vh;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+.agriventure-app *{box-sizing:border-box}.agriventure-app button,.agriventure-app input,.agriventure-app select,.agriventure-app textarea{font:inherit}.agriventure-app button{cursor:pointer}.agriventure-app svg{display:block}
+.ag-main{margin-left:var(--ag-sidebar);min-width:0;flex:1;height:100vh;overflow:auto}.ag-sidebar{position:fixed;inset:0 auto 0 0;width:var(--ag-sidebar);background:var(--ag-panel);border-right:1px solid var(--ag-border);display:flex;flex-direction:column;z-index:40}.ag-brand{display:block;padding:20px 28px 18px;border-bottom:1px solid var(--ag-border);text-decoration:none!important}.ag-brand strong{display:inline-block;color:#12365f;font-size:23px;line-height:1.1;font-weight:750;letter-spacing:-.03em;border-bottom:2px solid #55a3ff;padding-bottom:5px}.ag-brand small{display:block;margin-top:7px;color:#969eb0;font-size:8px;letter-spacing:.62em}.ag-menu-search{margin:16px 13px 9px;height:36px;border:1px solid #d9dee8;border-radius:11px;display:flex;align-items:center;gap:8px;padding:0 11px;color:#98a1b2}.ag-menu-search input{border:0!important;outline:0!important;width:100%;min-width:0;background:transparent!important;color:var(--ag-text);font-size:12px;box-shadow:none!important}.ag-menu-search input::placeholder{color:#777f91}.ag-sidebar nav{padding:0 9px 14px;flex:1;overflow-y:auto}.ag-nav{border:0;width:100%;min-height:38px;border-radius:9px;padding:9px 11px;margin:3px 0;background:transparent;color:#4f596f;display:flex;align-items:center;gap:10px;text-align:left;font-size:12px}.ag-nav>svg{width:16px;height:16px;color:#707b90}.ag-nav:hover{background:#f6f7fa}.ag-nav.active{background:var(--ag-primary-soft);color:var(--ag-primary);font-weight:700}.ag-nav.active>svg{color:var(--ag-primary)}.ag-doc-badge{width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#f1f3f8;color:#69748b;font-size:9px;font-weight:700;flex:none}.ag-nav.active .ag-doc-badge{background:#ddd7ff;color:var(--ag-primary)}.ag-nav-heading{display:flex;align-items:center;justify-content:space-between;margin:15px 5px 7px;color:#3f4759;font-size:12px;letter-spacing:.035em}.ag-nav-heading svg{width:13px;height:13px}.ag-user{border-top:1px solid var(--ag-border);min-height:70px;padding:12px 13px;display:flex;align-items:center;gap:10px}.ag-avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--ag-primary-soft);color:var(--ag-primary);font-size:11px;font-weight:800;flex:none}.ag-user-copy{min-width:0;flex:1}.ag-user-copy b,.ag-user-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ag-user-copy b{font-size:11px;color:var(--ag-text)}.ag-user-copy small{font-size:8px;color:var(--ag-muted);letter-spacing:.12em;margin-top:3px}.ag-logout,.ag-icon,.ag-mobile-menu{border:1px solid var(--ag-border);background:#fff;color:#657087;border-radius:9px;display:grid;place-items:center}.ag-logout{width:30px;height:30px;flex:none}.ag-logout:hover,.ag-icon:hover{border-color:#bdb5ff;color:var(--ag-primary);background:#faf9ff}.ag-logout svg,.ag-icon svg{width:15px;height:15px}
+.ag-topbar{height:66px;background:#fff;border-bottom:1px solid var(--ag-border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:30}.ag-crumb{display:flex;align-items:center;gap:10px;color:#929aab;font-size:12px}.ag-crumb i{font-style:normal;color:#b4bac7}.ag-crumb b{color:#111827;font-weight:750}.ag-top-actions{display:flex;align-items:center;gap:9px}.ag-icon{width:36px;height:36px}.ag-top-actions .ag-avatar{width:32px;height:32px}.ag-mobile-menu{display:none;width:36px;height:36px}.ag-mobile-backdrop{display:none}
+.ag-content{max-width:1490px;margin:0 auto;padding:28px 42px 64px}.ag-loading-panel,.agriventure-loading{padding:56px;text-align:center;color:var(--ag-muted);font-size:13px}.ag-page-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 18px}.ag-page-head h1,.ag-form-title h1{margin:0;color:#111827;font-size:26px;line-height:1.2;font-weight:760;letter-spacing:-.035em}.ag-button{min-height:38px;border:1px solid transparent;border-radius:9px;padding:9px 14px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:700;line-height:1;transition:.15s ease}.ag-button svg{width:14px;height:14px}.ag-button-primary{background:var(--ag-primary);border-color:var(--ag-primary);color:#fff;box-shadow:0 8px 17px rgba(91,69,232,.2)}.ag-button-primary:hover{background:#4935cf;color:#fff}.ag-button-light{background:#fff;border-color:var(--ag-border);color:#4c566d}.ag-button-light:hover{border-color:#c8c0ff;color:var(--ag-primary)}.ag-button:disabled{opacity:.55;cursor:not-allowed}
+.ag-dashboard-head{display:flex;justify-content:space-between;align-items:flex-start;margin:0 0 18px}.ag-eyebrow{display:block;color:#949caf;font-size:9px;font-weight:800;letter-spacing:.12em;margin-bottom:8px}.ag-dashboard-head h1{margin:0;color:#22283a;font-size:24px;line-height:1.2;font-weight:760;letter-spacing:-.035em}.ag-dashboard-head h1 em{font-style:normal;color:#50a7e9}.ag-dashboard-head p{margin:4px 0 0;color:#707a8f;font-size:12px}.ag-financial-year{text-align:center}.ag-financial-year span{display:block;color:#8b94a7;font-size:9px;font-weight:800;letter-spacing:.08em}.ag-financial-year b{display:block;color:#31384a;font-size:13px;margin-top:5px}.ag-summary-card{width:355px;min-height:126px;background:#fff;border:1px solid #e2e5ec;border-radius:14px;box-shadow:var(--ag-shadow);padding:20px;display:flex;flex-direction:column;align-items:flex-start;margin-bottom:18px}.ag-summary-icon{width:32px;height:32px;border-radius:9px;background:var(--ag-primary-soft);color:var(--ag-primary);display:grid;place-items:center}.ag-summary-icon svg{width:16px;height:16px}.ag-summary-card strong{font-size:23px;line-height:1;margin-top:16px;color:#22283a}.ag-summary-card small{font-size:10px;color:#8992a6;margin-top:8px}.ag-dashboard-grid{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(310px,1fr);gap:16px}.ag-dashboard-card{background:#fff;border:1px solid #e1e4eb;border-radius:14px;box-shadow:var(--ag-shadow);overflow:hidden;min-height:236px}.ag-dashboard-card>header{min-height:42px;border-bottom:1px solid var(--ag-border);padding:0 17px;display:flex;align-items:center;justify-content:space-between}.ag-dashboard-card>header b{font-size:12px}.ag-dashboard-card>header small{font-size:9px;color:#8d96a8}.ag-dashboard-table{overflow:auto}.ag-dashboard-table table,.ag-table-wrap table,.ag-child-table table{width:100%;border-collapse:collapse}.ag-dashboard-table th,.ag-table-wrap th,.ag-child-table th{height:36px;padding:0 15px;text-align:left;color:#8c95a8;font-size:9px;text-transform:uppercase;letter-spacing:.055em;background:#fbfbfd;border-bottom:1px solid var(--ag-border);white-space:nowrap}.ag-dashboard-table td{height:40px;padding:0 15px;color:#353d50;font-size:11px;border-bottom:1px solid var(--ag-border)}.ag-dashboard-table tr:last-child td{border-bottom:0}.ag-approval-body{min-height:193px}.ag-empty-approval{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#9099ab}.ag-empty-approval svg{width:25px;height:25px;margin-bottom:12px}.ag-empty-approval b{font-size:11px;color:#252b3c}.ag-empty-approval span{font-size:9px;margin-top:7px}.ag-approval-row{width:100%;border:0;border-bottom:1px solid var(--ag-border);background:#fff;padding:12px 16px;text-align:left;display:flex;justify-content:space-between}.ag-approval-row b{font-size:11px}.ag-approval-row span{font-size:9px;color:var(--ag-muted)}
+.ag-toolbar{display:grid;grid-template-columns:minmax(240px,1fr) 150px 145px 145px;gap:10px;margin-bottom:12px}.ag-toolbar input,.ag-toolbar select,.ag-search-control{height:38px;border:1px solid var(--ag-border);border-radius:9px;background:#fff;color:#465067;font-size:12px;outline:0;box-shadow:none}.ag-toolbar input,.ag-toolbar select{padding:0 11px}.ag-toolbar input:focus,.ag-toolbar select:focus,.ag-search-control:focus-within{border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08)}.ag-search-control{display:flex;align-items:center;padding:0 10px;gap:8px}.ag-search-control svg{width:14px;height:14px;color:#919aac}.ag-search-control input{width:100%;height:100%;border:0!important;padding:0!important;background:transparent!important;box-shadow:none!important}.ag-table-state{min-height:160px}.ag-table-wrap{overflow:auto;background:#fff;border-top:1px solid var(--ag-border);border-bottom:1px solid var(--ag-border)}.ag-table-wrap table{min-width:850px}.ag-table-wrap td{height:46px;padding:0 14px;color:#4a5469;font-size:11px;border-bottom:1px solid var(--ag-border);white-space:nowrap}.ag-table-wrap tbody tr:hover td{background:#fcfcff}.ag-table-state footer{display:flex;align-items:center;justify-content:space-between;padding:12px 0;color:#7f889c;font-size:10px}.ag-pager{width:32px;height:32px;border:1px solid var(--ag-border);background:#fff;color:#7b8598;border-radius:8px;margin-left:6px;display:inline-grid;place-items:center}.ag-pager svg{width:13px;height:13px}.ag-pager:disabled{opacity:.45;cursor:not-allowed}.ag-doc-link{border:0;background:transparent;color:var(--ag-teal);font-weight:750;padding:0;font-size:inherit}.ag-doc-link:hover{text-decoration:underline}.ag-status-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 8px;background:var(--ag-teal-soft);color:var(--ag-teal);font-size:9px;font-weight:700;white-space:nowrap}.ag-status-pill i{width:5px;height:5px;border-radius:50%;background:currentColor}.ag-status-pill.draft{background:var(--ag-amber-soft);color:var(--ag-amber)}.ag-status-pill.cancelled,.ag-status-pill.rejected{background:var(--ag-red-soft);color:var(--ag-red)}.ag-empty{height:100px!important;text-align:center!important;color:#667085!important}.ag-error{max-width:540px;margin:45px auto;padding:26px;border:1px solid #f1c9cf;border-radius:12px;background:#fff6f7;color:var(--ag-red);display:flex;align-items:center;flex-direction:column;text-align:center;gap:8px}.ag-error svg{width:24px;height:24px}.ag-error b{color:#8d2c3b}.ag-error span{font-size:11px}
+.ag-form-head{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;margin-bottom:14px}.ag-form-title h1{font-size:21px}.ag-form-title span{display:inline-block;margin-top:5px;color:var(--ag-muted);font-size:10px}.ag-form-actions{display:flex;gap:8px}.ag-notice{min-height:42px;border:1px solid #addfd6;background:#edf9f6;color:#54736f;border-radius:10px;padding:10px 13px;margin-bottom:14px;display:flex;align-items:center;gap:9px;font-size:11px}.ag-notice svg{width:16px;height:16px;color:var(--ag-teal);flex:none}.ag-form-tabs{min-width:0}.ag-tab-list{display:flex;align-items:flex-end;gap:4px;overflow-x:auto;padding:0 4px;border-bottom:1px solid var(--ag-border);scrollbar-width:thin}.ag-tab-button{border:0;border-bottom:2px solid transparent;background:transparent;padding:11px 13px;color:#6f788c;font-size:11px;font-weight:650;white-space:nowrap}.ag-tab-button:hover{color:var(--ag-primary)}.ag-tab-button.active{color:var(--ag-primary);border-bottom-color:var(--ag-primary)}.ag-tab-panel{display:none;padding-top:14px}.ag-tab-panel.active{display:block}.ag-form-section{background:#fff;border:1px solid var(--ag-border);border-radius:13px;box-shadow:var(--ag-shadow);margin-bottom:14px;overflow:hidden}.ag-form-section>header{height:46px;border-bottom:1px solid var(--ag-border);display:flex;align-items:center;gap:10px;padding:0 15px}.ag-form-section>header span{width:24px;height:24px;border-radius:7px;background:var(--ag-primary-soft);color:var(--ag-primary);display:grid;place-items:center;font-size:9px;font-weight:800}.ag-form-section>header h2{margin:0;color:#31384a;font-size:12px;font-weight:750}.ag-form-grid{padding:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 16px}.ag-field-slot{min-width:0}.ag-field-wide{grid-column:1/-1}.ag-form-grid .frappe-control{margin:0}.ag-form-grid .control-label,.ag-child-table .control-label{color:#657087;font-size:10px;font-weight:700;margin-bottom:6px}.ag-form-grid .form-control,.ag-form-grid .input-with-feedback,.ag-child-table .form-control,.ag-child-table .input-with-feedback{min-height:38px;border:1px solid var(--ag-border);border-radius:8px;background:#fff;color:#30384a;font-size:11px;box-shadow:none}.ag-form-grid .form-control:focus,.ag-form-grid .input-with-feedback:focus,.ag-child-table .form-control:focus,.ag-child-table .input-with-feedback:focus{border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08)}.ag-form-grid .like-disabled-input{min-height:35px;border-radius:8px;background:#f7f8fa;border-color:#eceef3}.ag-child-table{border:1px solid var(--ag-border);border-radius:10px;overflow:hidden}.ag-child-head{height:50px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--ag-border);background:#fbfbfd}.ag-child-head h3{margin:0;font-size:11px}.ag-child-head span{display:block;color:var(--ag-muted);font-size:9px;margin-top:3px}.ag-child-scroll{overflow:auto}.ag-child-table table{min-width:840px}.ag-child-table th:first-child,.ag-child-table td:first-child{width:42px;text-align:center}.ag-child-table td{min-width:135px;padding:8px;border-bottom:1px solid var(--ag-border);vertical-align:top;background:#fff}.ag-child-table td:last-child{min-width:45px;width:45px}.ag-child-table .frappe-control{margin:0}.ag-child-table .control-label{display:none}.ag-child-table .form-control,.ag-child-table .input-with-feedback{min-height:34px;font-size:10px}.ag-remove-row{width:30px;height:30px;border:0;border-radius:7px;background:var(--ag-red-soft);color:var(--ag-red);display:grid;place-items:center}.ag-remove-row svg{width:13px;height:13px}
+.ag-dark{--ag-bg:#171c29;--ag-panel:#202637;--ag-border:#343d52;--ag-text:#edf1fb;--ag-muted:#a6aec0}.ag-dark .ag-sidebar,.ag-dark .ag-topbar,.ag-dark .ag-summary-card,.ag-dark .ag-dashboard-card,.ag-dark .ag-form-section,.ag-dark .ag-toolbar input,.ag-dark .ag-toolbar select,.ag-dark .ag-search-control,.ag-dark .ag-child-table td,.ag-dark .ag-icon,.ag-dark .ag-button-light{background:var(--ag-panel);color:var(--ag-text)}.ag-dark .ag-dashboard-head h1,.ag-dark .ag-form-title h1,.ag-dark .ag-page-head h1,.ag-dark .ag-crumb b,.ag-dark .ag-form-section>header h2,.ag-dark .ag-dashboard-card>header b{color:var(--ag-text)}
+
+@media(max-width:1050px){.ag-content{padding:24px 25px 54px}.ag-dashboard-grid{grid-template-columns:1fr}.ag-approval-card{min-height:220px}.ag-toolbar{grid-template-columns:1fr 140px 135px 135px}.ag-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){body.ag-portal-active{overflow:auto}.agriventure-app{--ag-sidebar:286px;min-height:100vh;height:auto;overflow:visible}.ag-main{margin-left:0;height:auto;min-height:100vh;overflow:visible}.ag-sidebar{transform:translateX(-100%);transition:transform .2s ease;box-shadow:0 0 30px rgba(25,30,44,.16)}.ag-menu-open .ag-sidebar{transform:translateX(0)}.ag-mobile-backdrop{position:fixed;inset:0;background:rgba(25,30,44,.28);z-index:35}.ag-menu-open .ag-mobile-backdrop{display:block}.ag-mobile-menu{display:grid}.ag-topbar{height:58px;padding:0 13px}.ag-crumb{flex:1;margin-left:9px;min-width:0}.ag-crumb span{display:none}.ag-crumb i{display:none}.ag-crumb b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ag-top-actions .ag-avatar{display:none}.ag-icon{width:34px;height:34px}.ag-content{padding:20px 13px 44px}.ag-dashboard-head{gap:14px}.ag-dashboard-head h1{font-size:21px}.ag-dashboard-head p{font-size:11px}.ag-financial-year{min-width:82px}.ag-summary-card{width:100%}.ag-dashboard-grid{grid-template-columns:1fr}.ag-dashboard-card{min-height:220px}.ag-dashboard-table table{min-width:590px}.ag-page-head{align-items:flex-start}.ag-page-head h1{font-size:22px}.ag-toolbar{grid-template-columns:1fr 1fr}.ag-search-control{grid-column:1/-1}.ag-table-wrap table{min-width:760px}.ag-form-head{grid-template-columns:auto 1fr}.ag-form-title{min-width:0}.ag-form-title h1{font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ag-form-actions{grid-column:1/-1;justify-content:flex-end}.ag-form-grid{grid-template-columns:1fr}.ag-field-wide{grid-column:auto}.ag-tab-list{margin:0 -13px;padding:0 13px}.ag-notice{align-items:flex-start}.ag-child-table{border-radius:8px}}
+@media(max-width:440px){.ag-content{padding:17px 11px 38px}.ag-dashboard-head{display:block}.ag-financial-year{text-align:left;margin-top:14px}.ag-dashboard-head h1{font-size:20px}.ag-summary-card{min-height:112px;padding:17px}.ag-dashboard-grid{gap:12px}.ag-dashboard-card{border-radius:12px}.ag-toolbar{grid-template-columns:1fr}.ag-search-control{grid-column:auto}.ag-page-head{display:block}.ag-page-head .ag-button{margin-top:12px;width:100%}.ag-table-state footer{align-items:flex-start}.ag-form-head{gap:9px}.ag-form-head>.ag-button{padding:8px 10px}.ag-form-actions{display:grid;grid-template-columns:1fr 1fr}.ag-form-actions .ag-button{width:100%}.ag-form-grid{padding:13px;gap:12px}.ag-form-section>header{padding:0 12px}.ag-tab-button{padding:10px 11px}.ag-user{min-height:64px}}
+
+
+/* Dashboard, icon and dark-theme refinements */
+.agriventure-app{--duxp-iris:#6754eb;--duxp-cyan:#18c5c7}
+.ag-nav{justify-content:flex-start!important;text-align:left!important}
+.ag-dashboard-nav{padding-left:11px}
+.ag-doc-icon{width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#f1f3f8;color:#69748b;flex:none}
+.ag-doc-icon svg{width:14px;height:14px}
+.ag-nav.active .ag-doc-icon{background:#ddd7ff;color:var(--ag-primary)}
+.ag-nav-heading{width:100%;border:0;background:transparent;padding:0 5px;cursor:pointer;text-align:left}
+.ag-nav-heading svg{transition:transform .18s ease}
+.ag-transactions-collapsed .ag-transaction-list{display:none}
+.ag-transactions-collapsed .ag-nav-heading svg{transform:rotate(-90deg)}
+.ag-user-fy{display:flex;align-items:center;gap:4px;white-space:nowrap;border-radius:7px;background:#f1f3f8;color:#7d879c;padding:5px 7px;font-size:8px}
+.ag-user-fy b{font-size:8px;color:#606a7f;font-weight:750}
+.ag-dashboard-head h1 em{background:linear-gradient(90deg,var(--duxp-iris),#4f9fd8 55%,var(--duxp-cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+.ag-summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.ag-summary-grid .ag-summary-card{width:auto;min-width:0;margin:0}
+.ag-summary-purchase-order .ag-summary-icon{background:#e4f5f1;color:#0c9d87}
+.ag-summary-purchase-receipt .ag-summary-icon{background:#fff3e4;color:#bd7a16}
+.ag-summary-purchase-invoice .ag-summary-icon{background:#e8f2ff;color:#337ac1}
+.ag-summary-payment-entry .ag-summary-icon{background:#e8f7f2;color:#07866f}
+
+.ag-dark{--ag-bg:#080d15;--ag-panel:#101621;--ag-border:#273043;--ag-text:#f1f4fa;--ag-muted:#8d98ad;--ag-primary-soft:rgba(91,69,232,.22);--ag-shadow:0 16px 34px rgba(0,0,0,.2)}
+.ag-dark,.ag-dark .ag-main,.ag-dark .ag-content{background:#080d15;color:var(--ag-text)}
+.ag-dark .ag-sidebar,.ag-dark .ag-topbar{background:#101621;border-color:var(--ag-border)}
+.ag-dark .ag-brand{border-color:var(--ag-border)}
+.ag-dark .ag-brand strong{color:#eef4ff;border-bottom-color:#4f9fd8}
+.ag-dark .ag-brand small{color:#748098}
+.ag-dark .ag-menu-search{background:#101621;border-color:#354055;color:#7f8ba2}
+.ag-dark .ag-menu-search input,.ag-dark .ag-menu-search input::placeholder{color:#929db1!important}
+.ag-dark .ag-nav{color:#a4aec0}
+.ag-dark .ag-nav:hover{background:#171e2a;color:#eef2f8}
+.ag-dark .ag-nav.active{background:rgba(91,69,232,.24);color:#bdb5ff}
+.ag-dark .ag-doc-icon{background:#1b2331;color:#9ba6ba}
+.ag-dark .ag-nav.active .ag-doc-icon{background:rgba(91,69,232,.3);color:#c9c3ff}
+.ag-dark .ag-nav-heading{color:#d6dbe5}
+.ag-dark .ag-user{border-color:var(--ag-border)}
+.ag-dark .ag-user-fy{background:#1a2230;color:#8995aa}
+.ag-dark .ag-user-fy b{color:#c5ccda}
+.ag-dark .ag-avatar{background:#25234a;color:#c9c3ff}
+.ag-dark .ag-logout,.ag-dark .ag-icon,.ag-dark .ag-mobile-menu{background:#101621;border-color:#303a4d;color:#a7b1c3}
+.ag-dark .ag-logout:hover,.ag-dark .ag-icon:hover{background:#192131;border-color:#5b45e8;color:#c9c3ff}
+.ag-dark .ag-crumb{color:#7e899e}
+.ag-dark .ag-crumb b,.ag-dark .ag-dashboard-head h1,.ag-dark .ag-form-title h1,.ag-dark .ag-page-head h1,.ag-dark .ag-form-section>header h2,.ag-dark .ag-dashboard-card>header b,.ag-dark .ag-empty-approval b,.ag-dark .ag-summary-card strong{color:#f1f4fa}
+.ag-dark .ag-dashboard-head p,.ag-dark .ag-eyebrow,.ag-dark .ag-financial-year span,.ag-dark .ag-summary-card small{color:#8994a9}
+.ag-dark .ag-financial-year b{color:#e8edf7}
+.ag-dark .ag-summary-card,.ag-dark .ag-dashboard-card,.ag-dark .ag-form-section{background:#101621;border-color:#273043;box-shadow:var(--ag-shadow)}
+.ag-dark .ag-summary-icon{background:#242044;color:#a99fff}
+.ag-dark .ag-summary-purchase-order .ag-summary-icon,.ag-dark .ag-summary-payment-entry .ag-summary-icon{background:rgba(12,157,135,.15);color:#31cdb3}
+.ag-dark .ag-summary-purchase-receipt .ag-summary-icon{background:rgba(183,123,19,.16);color:#e5ac4d}
+.ag-dark .ag-summary-purchase-invoice .ag-summary-icon{background:rgba(79,159,216,.16);color:#70b9ee}
+.ag-dark .ag-dashboard-card>header,.ag-dark .ag-form-section>header,.ag-dark .ag-child-head{background:#111824;border-color:#273043}
+.ag-dark .ag-dashboard-table th,.ag-dark .ag-table-wrap th,.ag-dark .ag-child-table th{background:#141b28;color:#7f8ba2;border-color:#273043}
+.ag-dark .ag-dashboard-table td,.ag-dark .ag-table-wrap td{background:#101621;color:#dce2ed;border-color:#273043}
+.ag-dark .ag-dashboard-table tbody tr:hover td,.ag-dark .ag-table-wrap tbody tr:hover td{background:#141c29}
+.ag-dark .ag-approval-body,.ag-dark .ag-empty-approval{background:#101621}
+.ag-dark .ag-approval-row{background:#101621;color:#e7ebf3;border-color:#273043}
+.ag-dark .ag-toolbar input,.ag-dark .ag-toolbar select,.ag-dark .ag-search-control,.ag-dark .ag-form-grid .form-control,.ag-dark .ag-form-grid .input-with-feedback,.ag-dark .ag-child-table .form-control,.ag-dark .ag-child-table .input-with-feedback,.ag-dark .form-control,.ag-dark .input-with-feedback,.ag-dark textarea,.ag-dark select,.ag-dark input:not([type=checkbox]):not([type=radio]){background:#141b26!important;color:#eef2f9!important;border-color:#303a4d!important;box-shadow:none!important}
+.ag-dark input::placeholder,.ag-dark textarea::placeholder{color:#707c91!important}
+.ag-dark .ag-form-grid .like-disabled-input,.ag-dark .like-disabled-input,.ag-dark input:disabled,.ag-dark select:disabled,.ag-dark textarea:disabled{background:#19212d!important;color:#9ca7ba!important}
+.ag-dark .awesomplete>ul,.ag-dark .dropdown-menu{background:#151d29!important;border-color:#303a4d!important;color:#edf1f8!important}
+.ag-dark .awesomplete>ul>li:hover,.ag-dark .awesomplete>ul>li[aria-selected=true]{background:#222b3b!important;color:#fff!important}
+.ag-dark .ag-child-table,.ag-dark .ag-child-table td{background:#101621;border-color:#273043}
+.ag-dark .ag-tab-list{border-color:#273043}
+.ag-dark .ag-tab-button{color:#8f9aaf}
+.ag-dark .ag-tab-button.active{color:#a99fff;border-bottom-color:#715cf2}
+.ag-dark .ag-notice{background:#102824;border-color:#225047;color:#a8d9d1}
+.ag-dark .ag-button-light,.ag-dark .ag-pager{background:#141b26;border-color:#303a4d;color:#c4ccda}
+.ag-dark .ag-button-primary{background:#6c55ed;border-color:#6c55ed;box-shadow:0 9px 22px rgba(91,69,232,.28)}
+.ag-dark .ag-table-wrap{background:#101621;border-color:#273043}
+.ag-dark .ag-status-pill{background:rgba(12,157,135,.17);color:#34d0b5}
+.ag-dark .ag-status-pill.draft{background:rgba(183,123,19,.18);color:#e4aa48}
+.ag-dark .ag-status-pill.cancelled,.ag-dark .ag-status-pill.rejected{background:rgba(201,68,89,.18);color:#ef8192}
+.ag-dark .ag-error{background:#26151a;border-color:#63303a;color:#ef8c9a}
+
+@media(max-width:1250px){.ag-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.ag-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.ag-summary-grid{grid-template-columns:1fr;gap:11px}.ag-summary-grid .ag-summary-card{min-height:108px;padding:16px}.ag-user-fy{display:none}}
+
+
+/* Dashboard reference alignment v4 */
+body.ag-portal-active .page-container>.container,
+body.ag-portal-active .page-body>.container,
+body.ag-portal-active .page-content>.container{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}
+.agriventure-app .ag-dashboard{width:100%;min-width:0}
+.agriventure-app .ag-dashboard-head{width:100%;align-items:flex-start}
+.agriventure-app .ag-dashboard-head>div:first-child{min-width:0}
+.agriventure-app .ag-financial-year{margin-left:auto;text-align:right;flex:0 0 auto;padding-left:28px}
+.agriventure-app .ag-dashboard-head h1 em{
+	background: linear-gradient(90deg, var(--duxp-iris), #4f9fd8 55%, var(--duxp-cyan));
+	-webkit-background-clip:text;
+	background-clip:text;
+	-webkit-text-fill-color:transparent;
+	color:transparent;
+}
+.agriventure-app .ag-nav-heading,
+.agriventure-app .ag-nav-heading:hover,
+.agriventure-app .ag-nav-heading:focus,
+.agriventure-app .ag-nav-heading:active{
+	display:flex;
+	align-items:center;
+	justify-content:space-between;
+	width:100%;
+	min-height:30px;
+	margin:11px 0 5px;
+	padding:4px 5px;
+	border:0!important;
+	border-radius:0;
+	outline:0!important;
+	box-shadow:none!important;
+	background:transparent!important;
+	color:#3f4759;
+	appearance:none;
+	-webkit-appearance:none;
+}
+.agriventure-app .ag-nav-heading svg{transition:transform .18s ease}
+.agriventure-app.ag-transactions-collapsed .ag-transaction-list{display:none!important}
+.agriventure-app.ag-transactions-collapsed .ag-nav-heading svg{transform:rotate(-90deg)}
+.agriventure-app .ag-summary-grid{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;width:100%;gap:14px;margin:0 0 18px}
+.agriventure-app .ag-summary-grid>.ag-summary-card{width:auto!important;min-width:0!important;margin:0!important}
+.ag-dark .ag-nav-heading,
+.ag-dark .ag-nav-heading:hover,
+.ag-dark .ag-nav-heading:focus,
+.ag-dark .ag-nav-heading:active{color:#d6dbe5;background:transparent!important;border:0!important}
+@media(max-width:1250px){
+	.agriventure-app .ag-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:900px){
+	.agriventure-app .ag-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:560px){
+	.agriventure-app .ag-summary-grid{grid-template-columns:1fr!important}
+	.agriventure-app .ag-financial-year{margin-left:0;padding-left:0;text-align:left}
+}
+
+
+/* Material Request reference form v5 */
+.agriventure-app .ag-notice{justify-content:flex-start!important;text-align:left!important}
+.agriventure-app .ag-notice>span{margin:0!important;text-align:left!important;flex:0 1 auto}
+.agriventure-app .ag-form-actions{align-items:center}
+.agriventure-app .ag-get-items{position:relative}
+.agriventure-app .ag-get-items-toggle svg{width:12px;height:12px}
+.agriventure-app .ag-get-items-menu{display:none;position:absolute;right:0;top:calc(100% + 5px);z-index:60;width:190px;padding:6px;background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:9px;box-shadow:0 14px 30px rgba(25,30,44,.16)}
+.agriventure-app .ag-get-items.open .ag-get-items-menu{display:block}
+.agriventure-app .ag-get-items-menu button{display:block;width:100%;border:0;border-radius:6px;background:transparent;color:var(--ag-text);padding:9px 10px;text-align:left;font-size:11px}
+.agriventure-app .ag-get-items-menu button:hover{background:var(--ag-primary-soft);color:var(--ag-primary)}
+.agriventure-app .ag-mr-form-card,.agriventure-app .ag-mr-tab-card{overflow:visible}
+.agriventure-app .ag-mr-primary-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:18px 20px}
+.agriventure-app .ag-mr-items-section{border-top:1px solid var(--ag-border);padding:0 20px 20px}
+.agriventure-app .ag-mr-items-section>h2{margin:0 -20px 16px;padding:14px 20px;border-bottom:1px solid var(--ag-border);color:var(--ag-text);font-size:13px;font-weight:750}
+.agriventure-app .ag-mr-item-defaults{grid-template-columns:repeat(2,minmax(0,1fr));padding:0 0 16px}
+.agriventure-app .ag-mr-items-section>.ag-field-slot{width:100%}
+.agriventure-app .ag-mr-tab-card .ag-form-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:18px 20px}
+.agriventure-app .ag-material-items-table{border-radius:9px}
+.agriventure-app .ag-material-items-table .ag-child-head{height:50px}
+.agriventure-app .ag-material-items-table .ag-child-head h3{font-size:11px}
+.agriventure-app .ag-material-items-table table{min-width:930px}
+.agriventure-app .ag-material-items-table th{height:34px}
+.agriventure-app .ag-material-items-table td{padding:6px}
+.agriventure-app .ag-child-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 8px;border-top:1px solid var(--ag-border);background:var(--ag-panel)}
+.agriventure-app .ag-child-footer>div{display:flex;align-items:center;gap:6px}
+.agriventure-app .ag-child-footer .ag-button{min-height:28px;padding:6px 10px;font-size:10px}
+.agriventure-app .ag-collapse-header{display:flex;align-items:center;justify-content:space-between;width:100%;height:46px;padding:0 18px;border:0;border-bottom:1px solid var(--ag-border);background:transparent;color:var(--ag-text);text-align:left}
+.agriventure-app .ag-collapse-header h2{margin:0;font-size:13px;font-weight:750}
+.agriventure-app .ag-collapse-header svg{width:13px;height:13px;transition:transform .18s ease}
+.agriventure-app .ag-collapsible-section.collapsed .ag-collapse-header{border-bottom:0}
+.agriventure-app .ag-collapsible-section.collapsed .ag-collapse-header svg{transform:rotate(-90deg)}
+.agriventure-app .ag-collapsible-section.collapsed .ag-collapse-body{display:none}
+.ag-dark .ag-get-items-menu{background:#151d29;border-color:#303a4d}
+.ag-dark .ag-get-items-menu button{color:#dce2ed}
+.ag-dark .ag-get-items-menu button:hover{background:rgba(91,69,232,.24);color:#c9c3ff}
+.ag-dark .ag-mr-items-section,.ag-dark .ag-mr-items-section>h2,.ag-dark .ag-child-footer,.ag-dark .ag-collapse-header{border-color:#273043}
+.ag-dark .ag-child-footer{background:#101621}
+.ag-dark .ag-collapse-header{color:#f1f4fa}
+@media(max-width:720px){
+	.agriventure-app .ag-mr-primary-grid,.agriventure-app .ag-mr-item-defaults,.agriventure-app .ag-mr-tab-card .ag-form-grid{grid-template-columns:1fr}
+	.agriventure-app .ag-child-footer{align-items:stretch;flex-direction:column}
+	.agriventure-app .ag-child-footer>div{display:grid;grid-template-columns:1fr 1fr}
+	.agriventure-app .ag-child-footer .ag-button{width:100%}
+	.agriventure-app .ag-get-items{grid-column:1/-1}
+	.agriventure-app .ag-get-items-toggle{width:100%}
+	.agriventure-app .ag-get-items-menu{left:0;right:auto;width:100%}
+}
+
+
+/* Material Request screenshot fixes v6 */
+.agriventure-app .ag-form-title-spacer{min-width:0}
+.agriventure-app .ag-notice{display:flex!important;align-items:center!important;justify-content:flex-start!important;text-align:left!important}
+.agriventure-app .ag-notice>span{display:block!important;width:auto!important;max-width:100%!important;margin:0 auto 0 0!important;text-align:left!important;transform:none!important}
+.agriventure-app .ag-collapse-header{justify-content:flex-start!important;gap:7px}
+.agriventure-app .ag-collapse-header h2,.agriventure-app .ag-collapse-header svg{flex:0 0 auto}
+.agriventure-app .ag-material-items-table,.agriventure-app .ag-material-items-table td{overflow:visible}
+.agriventure-app .ag-material-items-table td{position:relative}
+.agriventure-app .ag-material-items-table td:focus-within{z-index:40}
+.agriventure-app .ag-material-items-table .awesomplete{position:relative;z-index:1}
+.agriventure-app .ag-material-items-table td:focus-within .awesomplete{z-index:50}
+.agriventure-app .ag-material-items-table .awesomplete>ul{z-index:1000!important;min-width:240px;max-height:220px!important;overflow-y:auto!important;box-shadow:0 12px 28px rgba(25,30,44,.18)!important}
+@media(min-width:721px){.agriventure-app .ag-material-items-table .ag-child-scroll{overflow:visible!important}}
+
+
+/* Add Multiple item dialog v7 */
+.ag-item-multi-dialog .modal-dialog{max-width:760px}
+.ag-item-multi-dialog .modal-content{border-radius:14px;overflow:visible}
+.ag-item-multi-dialog .modal-header{border-bottom:1px solid var(--ag-border)}
+.ag-item-multi-dialog .modal-body{padding:18px 20px 8px}
+.ag-item-multi-dialog .modal-footer{border-top:1px solid var(--ag-border);padding:12px 20px}
+.ag-item-multi-dialog .awesomplete>ul{z-index:1065!important;max-height:250px!important;overflow-y:auto!important}
+@media(max-width:720px){.ag-item-multi-dialog .modal-dialog{max-width:calc(100vw - 20px);margin:10px auto}.ag-item-multi-dialog .modal-body{padding:14px 15px 6px}}
+
+
+/* Select Item popup v8 */
+.agriventure-app .ag-add-multiple{background:#5b45e8!important;border-color:#5b45e8!important;color:#fff!important}
+.agriventure-app .ag-add-multiple:hover{background:#4935cf!important;border-color:#4935cf!important;color:#fff!important}
+.ag-item-select-dialog .modal-dialog{max-width:620px}
+.ag-item-select-dialog .modal-content{border-radius:14px;overflow:visible}
+.ag-item-select-dialog .modal-header{border-bottom:1px solid #e2e5ec}
+.ag-item-select-dialog .modal-body{padding:18px 20px 8px}
+.ag-item-select-dialog .modal-footer{border-top:1px solid #e2e5ec;padding:12px 20px}
+.ag-item-select-dialog .btn-primary,.ag-item-select-dialog .ag-item-picker-more{background:#5b45e8!important;border-color:#5b45e8!important;color:#fff!important}
+.ag-item-select-dialog .btn-primary:hover,.ag-item-select-dialog .ag-item-picker-more:hover{background:#4935cf!important;border-color:#4935cf!important;color:#fff!important}
+.ag-item-picker-list{border:1px solid #dfe3eb;border-radius:9px;overflow:hidden;background:#fff}
+.ag-item-choice{display:block;width:100%;min-height:42px;padding:10px 13px;border:0;border-bottom:1px solid #e7e9ef;background:#fff;color:#262d3d;text-align:left;font-size:12px;font-weight:650}
+.ag-item-choice:last-child{border-bottom:0}
+.ag-item-choice:hover,.ag-item-choice.selected{background:#eeebff;color:#5b45e8}
+.ag-item-picker-empty{padding:28px 14px;border:1px solid #dfe3eb;border-radius:9px;color:#7d879c;text-align:center;font-size:12px}
+.ag-item-picker-error{color:#c94459}
+.ag-item-picker-more-wrap{padding-top:9px}
+.ag-item-picker-more{min-height:32px;padding:7px 13px;border:1px solid #5b45e8;border-radius:8px;font-size:11px;font-weight:700}
+@media(max-width:720px){.ag-item-select-dialog .modal-dialog{max-width:calc(100vw - 20px);margin:10px auto}.ag-item-select-dialog .modal-body{padding:14px 15px 6px}.ag-item-choice{min-height:40px}}
+
+
+/* Barcode and Printing arrow v9 */
+.agriventure-app .ag-mr-item-defaults [data-fieldname="scan_barcode"],
+.agriventure-app .ag-mr-item-defaults [data-fieldname="scan_barcode"] .frappe-control{display:block!important;visibility:visible!important}
+.agriventure-app .ag-collapse-header{justify-content:flex-start!important}
+.agriventure-app .ag-collapse-title{display:inline-flex!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;width:auto!important;max-width:max-content!important;flex:0 0 auto!important}
+.agriventure-app .ag-collapse-title h2{display:inline-block!important;width:auto!important;max-width:none!important;flex:0 0 auto!important;margin:0!important}
+.agriventure-app .ag-collapse-title svg{position:static!important;display:block!important;flex:0 0 auto!important;margin:0!important}
+.agriventure-app .ag-collapsible-section.collapsed .ag-collapse-title svg{transform:rotate(-90deg)}
+
+
+/* Transaction filters v10 */
+.agriventure-app .ag-filter-toolbar{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:11px}
+.agriventure-app .ag-filter-grid{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:9px;flex:1 1 760px;min-width:0}
+.agriventure-app .ag-list-filter-slot,.agriventure-app .ag-list-filter{min-width:0}
+.agriventure-app .ag-list-filter .frappe-control{margin:0}
+.agriventure-app .ag-list-filter .control-label,.agriventure-app .ag-list-filter .help-box,.agriventure-app .ag-list-filter .like-disabled-input{display:none!important}
+.agriventure-app .ag-list-filter .form-control,.agriventure-app .ag-list-filter .input-with-feedback{width:100%;height:38px;min-height:38px;padding:0 11px;border:1px solid var(--ag-border);border-radius:9px;background:var(--ag-bg);color:var(--ag-text);font-size:12px;box-shadow:none}
+.agriventure-app .ag-list-filter .form-control:focus,.agriventure-app .ag-list-filter .input-with-feedback:focus{border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08)}
+.agriventure-app .ag-filter-dates{display:flex;align-items:flex-end;gap:8px;flex:0 1 auto}
+.agriventure-app .ag-filter-dates label{margin:0;color:var(--ag-muted);font-size:9px;font-weight:700}
+.agriventure-app .ag-filter-dates label span{display:block;margin:0 0 4px 2px}
+.agriventure-app .ag-filter-dates input{height:38px;min-width:130px;padding:0 9px;border:1px solid var(--ag-border);border-radius:9px;background:var(--ag-bg);color:var(--ag-text);font-size:11px}
+.agriventure-app .ag-filter-clear{height:38px;min-height:38px}
+.ag-dark .ag-filter-toolbar{background:#101621;border-color:#273043}
+.ag-dark .ag-list-filter .form-control,.ag-dark .ag-list-filter .input-with-feedback,.ag-dark .ag-filter-dates input{background:#141b26!important;color:#eef2f9!important;border-color:#303a4d!important}
+@media(max-width:1180px){.agriventure-app .ag-filter-grid{grid-template-columns:repeat(3,minmax(140px,1fr));flex-basis:100%}.agriventure-app .ag-filter-dates{width:100%}}
+@media(max-width:720px){.agriventure-app .ag-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.agriventure-app .ag-filter-dates{display:grid;grid-template-columns:1fr 1fr}.agriventure-app .ag-filter-dates input{width:100%;min-width:0}.agriventure-app .ag-filter-clear{grid-column:1/-1;width:100%}}
+@media(max-width:440px){.agriventure-app .ag-filter-grid{grid-template-columns:1fr}.agriventure-app .ag-filter-dates{grid-template-columns:1fr}}
+
+/* Transaction filters v11 */
+.agriventure-app .ag-filter-toolbar{display:grid;grid-template-columns:minmax(110px,1.05fr) minmax(110px,1.05fr) minmax(130px,1fr) minmax(110px,.9fr) minmax(120px,1fr) 126px 126px auto;align-items:end;gap:9px;margin-bottom:0;padding:10px;background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:11px}
+.agriventure-app .ag-filter-field{display:block;min-width:0;margin:0}
+.agriventure-app .ag-filter-label-slot{display:block;height:13px;margin:0 0 4px 2px;color:var(--ag-muted);font-size:9px;font-weight:700;line-height:13px}
+.agriventure-app .ag-list-filter-slot,.agriventure-app .ag-list-filter,.agriventure-app .ag-list-filter .frappe-control,.agriventure-app .ag-list-filter .control-input-wrapper,.agriventure-app .ag-list-filter .control-input,.agriventure-app .ag-list-filter .awesomplete{width:100%;min-width:0;margin:0}
+.agriventure-app .ag-list-filter .control-label,.agriventure-app .ag-list-filter .help-box,.agriventure-app .ag-list-filter .like-disabled-input{display:none!important}
+.agriventure-app .ag-list-filter .form-control,.agriventure-app .ag-list-filter .input-with-feedback,.agriventure-app .ag-filter-date input{width:100%;height:38px;min-height:38px;margin:0;padding:0 11px;border:1px solid var(--ag-border);border-radius:9px;background:var(--ag-bg);color:var(--ag-text);font-size:12px;line-height:38px;box-shadow:none;outline:0}
+.agriventure-app .ag-list-filter .form-control:focus,.agriventure-app .ag-list-filter .input-with-feedback:focus,.agriventure-app .ag-filter-date input:focus{border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08)}
+.agriventure-app .ag-list-filter .awesomplete>ul{z-index:1100;max-height:260px;overflow:auto}
+.agriventure-app .ag-filter-date input.is-invalid{border-color:#dc5d70;box-shadow:0 0 0 3px rgba(220,93,112,.08)}
+.agriventure-app .ag-filter-clear-slot{min-width:78px}
+.agriventure-app .ag-filter-clear{width:100%;height:38px;min-height:38px;white-space:nowrap}
+.agriventure-app .ag-filter-feedback{min-height:18px;padding:3px 2px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:10px}
+.agriventure-app .ag-filter-error{display:none;color:#c23d53;font-weight:650}
+.agriventure-app .ag-list-progress{display:none;margin-left:auto;color:var(--ag-primary);font-weight:650}
+.agriventure-app .ag-table-state{transition:opacity .15s ease}
+.agriventure-app .ag-table-state.is-loading{opacity:.58}
+.ag-dark .ag-filter-toolbar{background:#101621;border-color:#273043}
+.ag-dark .ag-list-filter .form-control,.ag-dark .ag-list-filter .input-with-feedback,.ag-dark .ag-filter-date input{background:#141b26!important;color:#eef2f9!important;border-color:#303a4d!important}
+@media(max-width:1280px){
+	.agriventure-app .ag-filter-toolbar{grid-template-columns:repeat(4,minmax(140px,1fr))}
+}
+@media(max-width:720px){
+	.agriventure-app .ag-filter-toolbar{grid-template-columns:repeat(2,minmax(0,1fr));padding:9px}
+	.agriventure-app .ag-filter-clear-slot{grid-column:1/-1}
+}
+@media(max-width:440px){
+	.agriventure-app .ag-filter-toolbar{grid-template-columns:1fr;gap:8px}
+	.agriventure-app .ag-filter-clear-slot{grid-column:auto}
+	.agriventure-app .ag-filter-feedback{align-items:flex-start;flex-direction:column;gap:2px}
+	.agriventure-app .ag-list-progress{margin-left:0}
+}
+
+/* Searchable combobox v12 */
+.agriventure-app .awesomplete > ul > li.ag-combo-selected{color:#5B45E8;font-weight:650;background:rgba(91,69,232,.06)}
+.agriventure-app .awesomplete > ul > li.ag-combo-selected::after{content:"\2713";float:right;margin-left:10px;color:#5B45E8;font-weight:700}
+
+/* Link field chrome + barcode button v13 */
+.agriventure-app .frappe-control[data-fieldtype="Link"] .btn-clear,
+.agriventure-app .frappe-control[data-fieldtype="Dynamic Link"] .btn-clear{display:none!important}
+.agriventure-app [data-fieldname="scan_barcode"] .link-btn{top:50%!important;transform:translateY(-50%)!important;bottom:auto!important}
+
+/* Check controls + metadata accordions v14 */
+.agriventure-app .ag-form-grid input[type="checkbox"],
+.agriventure-app .ag-child-table input[type="checkbox"]{width:15px;height:15px;min-width:0;min-height:0;margin:0;padding:0;flex:0 0 auto;border:1px solid var(--ag-border);border-radius:4px;background:#fff;accent-color:#5B45E8;box-shadow:none;vertical-align:middle;cursor:pointer}
+.agriventure-app .ag-form-grid .frappe-control[data-fieldtype="Check"]{display:flex;align-items:center;min-height:38px;padding-top:22px}
+.agriventure-app .ag-child-table .frappe-control[data-fieldtype="Check"]{padding-top:0;min-height:34px}
+.agriventure-app .frappe-control[data-fieldtype="Check"] .checkbox,
+.agriventure-app .frappe-control[data-fieldtype="Check"] .input-area{margin:0;padding:0;display:flex;align-items:center}
+.agriventure-app .frappe-control[data-fieldtype="Check"] label{display:flex;align-items:center;gap:8px;margin:0;color:#31384a;font-size:11px;font-weight:650;cursor:pointer}
+.agriventure-app .frappe-control[data-fieldtype="Check"] .label-area{font-size:11px;font-weight:650}
+.ag-dark .ag-form-grid input[type="checkbox"],.ag-dark .ag-child-table input[type="checkbox"]{background:transparent!important;border-color:#303a4d!important}
+.agriventure-app .ag-form-section>.ag-collapse-header{gap:10px;padding:0 15px;cursor:pointer}
+.agriventure-app .ag-form-section>.ag-collapse-header>span{width:24px;height:24px;border-radius:7px;background:var(--ag-primary-soft);color:var(--ag-primary);display:grid;place-items:center;font-size:9px;font-weight:800;flex:0 0 auto}
+.agriventure-app .ag-form-section>.ag-collapse-header>h2{margin:0;color:#31384a;font-size:12px;font-weight:750;flex:0 0 auto}
+.agriventure-app .ag-form-section>.ag-collapse-header>svg{margin-left:auto;flex:0 0 auto;color:var(--ag-muted)}
+
+/* v16 - native checkbox glyph, dropdown overflow, merged cards, PO reference chips */
+.agriventure-app .ag-form-grid input[type="checkbox"],
+.agriventure-app .ag-child-table input[type="checkbox"]{-webkit-appearance:checkbox!important;appearance:checkbox!important;width:15px;height:15px;min-width:15px;min-height:15px;margin:0;padding:0;flex:0 0 auto;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;accent-color:#5B45E8;vertical-align:middle;cursor:pointer}
+.ag-dark .ag-form-grid input[type="checkbox"],.ag-dark .ag-child-table input[type="checkbox"]{background:none!important;border:0!important}
+.agriventure-app .ag-form-section{overflow:visible}
+.agriventure-app .ag-form-section>header,.agriventure-app .ag-form-section>.ag-collapse-header{border-radius:12px 12px 0 0}
+.agriventure-app .ag-form-section>.ag-form-grid+.ag-form-grid{border-top:1px solid var(--ag-border)}
+.agriventure-app .ag-form-section>.ag-collapse-header>svg{margin-left:0}
+.agriventure-app .ag-po-links{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px}
+.agriventure-app .ag-po-link{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border:1px solid var(--ag-border);border-radius:999px;background:#fff;color:var(--ag-text);font-size:11px;font-weight:650;white-space:nowrap}
+.agriventure-app .ag-po-link b{display:grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:var(--ag-primary-soft);color:var(--ag-primary);font-size:10px}
+.agriventure-app button.ag-po-link{cursor:pointer}
+.agriventure-app button.ag-po-link:hover{border-color:var(--ag-primary);color:var(--ag-primary)}
+.ag-dark .ag-po-link{background:#141b26;border-color:#303a4d;color:#eef2f9}
+@media(max-width:720px){.agriventure-app .ag-po-link{width:100%;justify-content:flex-start}}
+
+/* v17 - metadata columns inside a section card */
+.agriventure-app .ag-form-grid{grid-template-columns:repeat(var(--ag-cols,3),minmax(0,1fr))}
+.agriventure-app .ag-form-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.agriventure-app .ag-form-col:empty{display:block}
+@media(max-width:1050px){.agriventure-app .ag-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.agriventure-app .ag-form-grid{grid-template-columns:1fr}}
+
+/* v18 - child table dropdown is pinned to the viewport by JS, this just gives it depth */
+.agriventure-app .ag-child-table .awesomplete>ul{z-index:1200;box-shadow:0 10px 26px rgba(25,30,44,.14)}
+
+/* v23 - serial number column on every list page */
+.agriventure-app .ag-table-wrap th.ag-sr-no,.agriventure-app .ag-table-wrap td.ag-sr-no{width:52px;min-width:52px;text-align:center;color:var(--ag-muted);font-variant-numeric:tabular-nums}
+
+/* v24 - one wrapper shape for every filter, one shared baseline */
+.agriventure-app .ag-filter-toolbar{display:grid;grid-template-columns:repeat(var(--ag-filter-cols,5),minmax(0,1fr)) 148px 148px auto;align-items:end;gap:9px;padding:10px}
+.agriventure-app .ag-filter-field{display:flex;flex-direction:column;justify-content:flex-end;min-width:0;margin:0}
+.agriventure-app .ag-filter-label-slot{display:block;height:14px;margin:0 0 5px 2px;color:var(--ag-muted);font-size:9px;font-weight:700;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agriventure-app .ag-filter-control{display:block;height:38px;min-width:0}
+.agriventure-app .ag-filter-control .ag-list-filter-slot,
+.agriventure-app .ag-filter-control .frappe-control,
+.agriventure-app .ag-filter-control .control-input-wrapper,
+.agriventure-app .ag-filter-control .control-input,
+.agriventure-app .ag-filter-control .awesomplete{display:block;width:100%;min-width:0;height:38px;margin:0;padding:0}
+.agriventure-app .ag-filter-control input,
+.agriventure-app .ag-filter-control .form-control,
+.agriventure-app .ag-filter-control .input-with-feedback,
+.agriventure-app .ag-filter-control .ag-button{box-sizing:border-box;display:block;width:100%;height:38px;min-height:38px;max-height:38px;margin:0;line-height:normal}
+.agriventure-app .ag-filter-control .ag-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.agriventure-app .ag-filter-control .awesomplete>ul{height:auto;max-height:260px}
+.agriventure-app .ag-filter-field-clear{min-width:88px}
+@media(max-width:1280px){.agriventure-app .ag-filter-toolbar{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:720px){.agriventure-app .ag-filter-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.agriventure-app .ag-filter-field-clear{grid-column:1/-1}}
+@media(max-width:440px){.agriventure-app .ag-filter-toolbar{grid-template-columns:1fr}.agriventure-app .ag-filter-field-clear{grid-column:auto}}
+
+/* v24b - focus, invalid and dark styles follow the new .ag-filter-control wrapper */
+.agriventure-app .ag-filter-control input:focus,
+.agriventure-app .ag-filter-control .form-control:focus,
+.agriventure-app .ag-filter-control .input-with-feedback:focus{border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08);outline:0}
+.agriventure-app .ag-filter-control input.is-invalid{border-color:#dc5d70;box-shadow:0 0 0 3px rgba(220,93,112,.08)}
+.ag-dark .ag-filter-control input,
+.ag-dark .ag-filter-control .form-control,
+.ag-dark .ag-filter-control .input-with-feedback{background:#141b26!important;color:#eef2f9!important;border-color:#303a4d!important}
+
+/* v24c - one appearance for every filter control, dates included */
+.agriventure-app .ag-filter-control input,
+.agriventure-app .ag-filter-control .form-control,
+.agriventure-app .ag-filter-control .input-with-feedback{padding:0 11px;border:1px solid var(--ag-border);border-radius:9px;background:var(--ag-bg);color:var(--ag-text);font-family:inherit;font-size:12px;box-shadow:none;outline:0}
+.agriventure-app .ag-filter-control input[type=date]{padding-right:8px}
+.agriventure-app .ag-filter-control input[type=date]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer}
+.agriventure-app .ag-filter-control input[type=date]:hover::-webkit-calendar-picker-indicator{opacity:.85}
+
+/* v38 - blank choice at the top of every searchable dropdown */
+.agriventure-app .awesomplete > ul > li.ag-combo-blank{min-height:26px;border-top:1px solid var(--ag-border)}
+.agriventure-app .awesomplete > ul > li.ag-combo-blank::before{content:"\2014";color:var(--ag-muted)}
+
+/* v39 - document state badge, workflow actions and the Create menu */
+.agriventure-app .ag-doc-state{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;font-size:10px;font-weight:750;letter-spacing:.02em}
+.agriventure-app .ag-doc-state-amber{background:var(--ag-amber-soft);color:var(--ag-amber)}
+.agriventure-app .ag-doc-state-green{background:var(--ag-teal-soft);color:var(--ag-teal)}
+.agriventure-app .ag-doc-state-red{background:var(--ag-red-soft);color:var(--ag-red)}
+.agriventure-app .ag-form-head-no-title .ag-form-title-spacer{display:flex;align-items:center}
+.agriventure-app .ag-workflow-actions{display:inline-flex;gap:8px}
+.agriventure-app .ag-create-wrap{position:relative;display:inline-flex}
+.agriventure-app .ag-create-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:1200;min-width:210px;padding:6px;border:1px solid var(--ag-border);border-radius:10px;background:var(--ag-panel);box-shadow:0 12px 28px rgba(25,30,44,.16)}
+.agriventure-app .ag-create-wrap.open .ag-create-menu{display:block}
+.agriventure-app .ag-create-menu button{display:block;width:100%;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--ag-text);text-align:left;font-size:11px;font-weight:650;cursor:pointer}
+.agriventure-app .ag-create-menu button:hover{background:var(--ag-primary-soft);color:var(--ag-primary)}
+
+/* v42 - document header: eyebrow, name, state, actions on the right */
+.agriventure-app .ag-form-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.agriventure-app .ag-form-heading{display:flex;flex-direction:column;align-items:flex-start;gap:7px;min-width:0}
+.agriventure-app .ag-form-eyebrow{display:flex;align-items:center;gap:8px;color:var(--ag-muted);font-size:9px;font-weight:750;letter-spacing:.09em;text-transform:uppercase}
+.agriventure-app .ag-form-eyebrow b{padding:2px 8px;border-radius:999px;background:var(--ag-teal-soft);color:var(--ag-teal);font-size:9px;letter-spacing:.04em}
+.agriventure-app .ag-form-heading h1{margin:0;font-size:23px;font-weight:800;line-height:1.15;overflow-wrap:anywhere}
+.agriventure-app .ag-form-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end}
+.agriventure-app .ag-button-danger{border:1px solid #f0c3cb;background:var(--ag-red-soft);color:var(--ag-red)}
+.agriventure-app .ag-button-danger:hover{border-color:var(--ag-red)}
+.ag-dark .ag-form-eyebrow b{background:rgba(12,157,135,.18)}
+@media(max-width:720px){.agriventure-app .ag-form-head{flex-direction:column;align-items:stretch}.agriventure-app .ag-form-actions{justify-content:flex-start}}
+
+/* v43 - read-only activity trail beside the form */
+.agriventure-app .ag-form-body{display:grid;gap:14px;min-width:0}
+.agriventure-app .ag-form-body.has-activity{grid-template-columns:minmax(0,1fr) 340px;align-items:start}
+.agriventure-app .ag-form-main{min-width:0}
+.agriventure-app .ag-activity{position:sticky;top:0;background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:13px;box-shadow:var(--ag-shadow);overflow:hidden}
+.agriventure-app .ag-activity-head{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:13px 15px;border:0;border-bottom:1px solid var(--ag-border);background:transparent;color:var(--ag-text);text-align:left;cursor:pointer}
+.agriventure-app .ag-activity-title{display:flex;flex-direction:column;gap:3px;min-width:0}
+.agriventure-app .ag-activity-title b{font-size:13px;font-weight:750}
+.agriventure-app .ag-activity-title small{color:var(--ag-muted);font-size:10px;font-weight:600}
+.agriventure-app .ag-activity-head svg{width:13px;height:13px;flex:0 0 auto;color:var(--ag-muted);transition:transform .18s ease}
+.agriventure-app .ag-activity.collapsed .ag-activity-head{border-bottom:0}
+.agriventure-app .ag-activity.collapsed .ag-activity-head svg{transform:rotate(-90deg)}
+.agriventure-app .ag-activity.collapsed .ag-activity-body{display:none}
+.agriventure-app .ag-activity-body{max-height:min(560px,70vh);overflow-y:auto;padding:6px 15px 14px}
+.agriventure-app .ag-activity-empty{margin:12px 0;color:var(--ag-muted);font-size:11px}
+.agriventure-app .ag-activity-item{display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px;padding:11px 0;border-bottom:1px solid var(--ag-border)}
+.agriventure-app .ag-activity-item:last-child{border-bottom:0}
+.agriventure-app .ag-activity-mark{display:grid;place-items:center;width:26px;height:26px;margin-top:1px;border-radius:999px;background:var(--ag-bg);color:var(--ag-muted)}
+.agriventure-app .ag-activity-mark svg{width:13px;height:13px}
+.agriventure-app .ag-activity-mark-primary{background:var(--ag-primary-soft);color:var(--ag-primary)}
+.agriventure-app .ag-activity-mark-teal{background:var(--ag-teal-soft);color:var(--ag-teal)}
+.agriventure-app .ag-activity-mark-amber{background:var(--ag-amber-soft);color:var(--ag-amber)}
+.agriventure-app .ag-activity-mark-red{background:var(--ag-red-soft);color:var(--ag-red)}
+.agriventure-app .ag-activity-detail{min-width:0}
+.agriventure-app .ag-activity-detail header{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.agriventure-app .ag-activity-detail header b{font-size:11px;font-weight:750}
+.agriventure-app .ag-activity-detail time{color:var(--ag-muted);font-size:9px;white-space:nowrap}
+.agriventure-app .ag-activity-by{display:block;margin-top:2px;color:var(--ag-muted);font-size:10px;overflow-wrap:anywhere}
+.agriventure-app .ag-activity-detail p{margin:5px 0 0;font-size:11px;overflow-wrap:anywhere}
+.agriventure-app .ag-activity-detail ul{margin:6px 0 0;padding:7px 9px;list-style:none;border-radius:8px;background:var(--ag-bg)}
+.agriventure-app .ag-activity-detail li{font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+@media(max-width:1180px){.agriventure-app .ag-form-body.has-activity{grid-template-columns:minmax(0,1fr)}.agriventure-app .ag-activity{position:static}}
+
+/* v44 - the activity card starts level with the first section card */
+.agriventure-app .ag-form-body.has-activity > .ag-activity{margin-top:14px}
+.agriventure-app .ag-form-body.has-activity > .ag-activity{transition:margin-top .12s ease}
+@media(max-width:1180px){.agriventure-app .ag-form-body.has-activity > .ag-activity{margin-top:0}}
+
+/* v46 - reference chips read as links when they point somewhere */
+.agriventure-app button.ag-po-link[disabled]{cursor:default;opacity:.55}
+.agriventure-app button.ag-po-link[disabled]:hover{border-color:var(--ag-border);color:var(--ag-text)}
+
+/* v47 - the activity marks are joined into one timeline */
+.agriventure-app .ag-activity-item{position:relative}
+.agriventure-app .ag-activity-item::before{content:"";position:absolute;left:12px;top:0;bottom:0;width:1px;background:var(--ag-border)}
+.agriventure-app .ag-activity-item:first-child::before{top:12px}
+.agriventure-app .ag-activity-item:last-child::before{bottom:calc(100% - 12px)}
+.agriventure-app .ag-activity-item:only-child::before{display:none}
+.agriventure-app .ag-activity-mark{position:relative;z-index:1;box-shadow:0 0 0 3px var(--ag-panel)}
+
+/* v48 - row delete action in the list */
+.agriventure-app .ag-table-wrap th.ag-row-actions,.agriventure-app .ag-table-wrap td.ag-row-actions{width:52px;min-width:52px;text-align:center}
+.agriventure-app .ag-row-delete{width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:var(--ag-muted);display:inline-grid;place-items:center;cursor:pointer}
+.agriventure-app .ag-row-delete svg{width:13px;height:13px}
+.agriventure-app .ag-row-delete:hover{background:var(--ag-red-soft);color:var(--ag-red)}
+
+/* v53 - the divider starts after the icon column, not across the whole card */
+.agriventure-app .ag-activity-item{border-bottom:0}
+.agriventure-app .ag-activity-detail{padding-bottom:11px;border-bottom:1px solid var(--ag-border)}
+.agriventure-app .ag-activity-item:last-child .ag-activity-detail{padding-bottom:0;border-bottom:0}
+
+/* v55 - money columns are centred on the list pages */
+.agriventure-app .ag-table-wrap th.ag-amount-cell,.agriventure-app .ag-table-wrap td.ag-amount-cell{text-align:center}
+
+/* v59 - pending approval rows carry the state and date */
+.agriventure-app .ag-approval-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left}
+.agriventure-app .ag-approval-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.agriventure-app .ag-approval-main b{font-size:11px;font-weight:700;overflow-wrap:anywhere}
+.agriventure-app .ag-approval-main span{color:var(--ag-muted);font-size:10px}
+.agriventure-app .ag-approval-side{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none}
+.agriventure-app .ag-approval-side small{color:var(--ag-muted);font-size:9px;white-space:nowrap}
+
+/* v62 - square icon-only actions in the document header */
+.agriventure-app .ag-button.ag-icon-button{width:34px;min-width:34px;padding:0;display:inline-grid;place-items:center;gap:0}
+.agriventure-app .ag-button.ag-icon-button svg{width:15px;height:15px}
+
+/* v67 - approvals grow with their content, and the rejection remark card */
+.agriventure-app .ag-approval-card{min-height:220px;height:auto}
+.agriventure-app .ag-approval-body{height:auto;overflow:visible}
+.agriventure-app .ag-remark-card>header h2{margin:0;color:#31384a;font-size:12px;font-weight:750}
+.agriventure-app .ag-remark-text{margin:0;padding:12px 14px;border:1px solid #f0c3cb;border-left:3px solid var(--ag-red);border-radius:9px;background:var(--ag-red-soft);color:#7d2b3a;font-size:11px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
+.ag-dark .ag-remark-text{border-color:#4a2530;border-left-color:var(--ag-red);background:rgba(201,68,89,.12);color:#f0b8c2}
+
+/* v68 - the approvals card uses the Recent Activity table, tightened for a narrow column */
+.agriventure-app .ag-approval-table table{table-layout:auto}
+.agriventure-app .ag-approval-table th,.agriventure-app .ag-approval-table td{padding:0 10px;white-space:nowrap}
+.agriventure-app .ag-approval-table td{font-size:10px}
+.agriventure-app .ag-approval-table .ag-doc-link{font-size:10px}
+.agriventure-app .ag-approval-table tr:last-child td{border-bottom:0}
+
+/* ---- Agriventure Portal UX fixes (Aug 2026): Items table width-fit + Specification height ---- */
+/* Fix 2: keep the Items table always width-fit to its own container so it never needs a
+   horizontal scrollbar, on both Material Request's richer table and the generic
+   Purchase Order / Purchase Receipt / Purchase Invoice items table. */
+.agriventure-app .ag-child-table table {
+	min-width: 0 !important;
+	width: 100% !important;
+	table-layout: fixed !important;
+}
+.agriventure-app .ag-child-table td,
+.agriventure-app .ag-child-table th {
+	min-width: 0 !important;
+	padding: 5px !important;
+	font-size: 10px !important;
+	overflow: hidden;
+}
+.agriventure-app .ag-child-table .form-control,
+.agriventure-app .ag-child-table .input-with-feedback {
+	font-size: 10px !important;
+	padding-left: 5px !important;
+	padding-right: 5px !important;
+}
+.agriventure-app .ag-child-table th:first-child,
+.agriventure-app .ag-child-table td:first-child { width: 26px !important; }
+.agriventure-app .ag-child-table th:last-child,
+.agriventure-app .ag-child-table td:last-child { width: 44px !important; }
+
+/* Fix 4: the description column - "Specification" on a Material Request, "Description" on
+   a Purchase Order - should wrap its text instead of growing into the browser's tall
+   default textarea or being truncated to one ellipsized line: a short fixed box with its
+   own internal scroll for overflow. Scoped to every child table, so the column looks the
+   same whichever document it appears on. */
+.agriventure-app .ag-child-table [data-child-field="description"] textarea,
+.agriventure-app .ag-child-table [data-child-field="description"] .like-disabled-input {
+	height: 60px !important;
+	min-height: 34px !important;
+	max-height: 60px !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	resize: none !important;
+	white-space: normal !important;
+	word-wrap: break-word !important;
+}
+
+/* Purchase Order's "Get Items From Material Request" button sits next to Add Row in the
+   items table header, so the header needs to lay out more than one button there. */
+.agriventure-app .ag-child-head-actions { display: flex; align-items: center; gap: 8px; }
+
+/* v78 - native file attachments rendered inside the form column */
+.agriventure-app .ag-attach-label{display:block;margin-bottom:6px;color:#657087;font-size:10px;font-weight:700}
+.agriventure-app .ag-attach-body{border:1px solid var(--ag-border);border-radius:9px;background:var(--ag-bg);padding:10px}
+.agriventure-app .ag-attach-empty{margin:0 0 9px;color:var(--ag-muted);font-size:10px}
+.agriventure-app .ag-attach-list{margin:0 0 9px;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.agriventure-app .ag-attach-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.agriventure-app .ag-attach-list a{font-size:11px;color:var(--ag-primary);overflow-wrap:anywhere}
+.agriventure-app .ag-attach-remove{width:22px;height:22px;flex:none;border:0;border-radius:6px;background:transparent;color:var(--ag-muted);display:grid;place-items:center;cursor:pointer}
+.agriventure-app .ag-attach-remove:hover{background:var(--ag-red-soft);color:var(--ag-red)}
+.agriventure-app .ag-attach-remove svg{width:11px;height:11px}
+.agriventure-app .ag-attach-body .ag-attach-add{height:30px;min-height:30px;font-size:10px}
+
+/* v80 - Master Setting group in the sidebar, collapsing independently of Transactions */
+.agriventure-app.ag-masters-collapsed .ag-master-list{display:none!important}
+.agriventure-app.ag-transactions-collapsed .ag-nav-heading[data-action=toggle-masters] svg{transform:none}
+.agriventure-app.ag-masters-collapsed .ag-nav-heading[data-action=toggle-masters] svg{transform:rotate(-90deg)}
+
+/* v82 - camera dialog used by the attendance face check */
+.agriventure-app .ag-logout-face svg{transform:rotate(90deg)}
+.modal .frappe-control[data-fieldname="camera_html"] video{display:block;max-height:56vh;object-fit:cover}
+.modal .frappe-control[data-fieldname="camera_html"] .btn{width:100%}
+
+/* v84 - Attendance group in the sidebar, collapsing on its own */
+.agriventure-app.ag-attendance-collapsed .ag-attendance-list{display:none!important}
+.agriventure-app.ag-transactions-collapsed .ag-nav-heading[data-action=toggle-attendance] svg{transform:none}
+.agriventure-app.ag-attendance-collapsed .ag-nav-heading[data-action=toggle-attendance] svg{transform:rotate(-90deg)}
+
+/* v86 - Crop Operations group in the sidebar */
+.agriventure-app.ag-crop-collapsed .ag-crop-list{display:none!important}
+.agriventure-app.ag-transactions-collapsed .ag-nav-heading[data-action=toggle-crop] svg{transform:none}
+.agriventure-app.ag-crop-collapsed .ag-nav-heading[data-action=toggle-crop] svg{transform:rotate(-90deg)}
+
+/* v87 - Pick button sitting beside the Harvest Log date */
+.agriventure-app .ag-field-slot.ag-has-pick .control-input-wrapper{display:flex;align-items:stretch;gap:8px}
+.agriventure-app .ag-field-slot.ag-has-pick .control-input{flex:1 1 auto;min-width:0;margin:0}
+/* stretched rather than given a fixed height, so it always equals the date box */
+.agriventure-app .ag-pick-btn{flex:0 0 auto;align-self:stretch;height:auto;min-height:38px;padding-top:0;padding-bottom:0;white-space:nowrap}
+
+/* v92 - Point of Sale group in the sidebar */
+.agriventure-app.ag-pos-collapsed .ag-pos-list{display:none!important}
+.agriventure-app.ag-transactions-collapsed .ag-nav-heading[data-action=toggle-pos] svg{transform:none}
+.agriventure-app.ag-pos-collapsed .ag-nav-heading[data-action=toggle-pos] svg{transform:rotate(-90deg)}
+
+/* v94 - the "already open" note inside the POS opening dialog */
+.ag-pos-open-note{border:1px solid #f0d9a8;background:#fdf6e7;border-radius:8px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:#7a5a12}
+.ag-pos-open-note b{display:block;margin-bottom:5px;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.ag-pos-open-note ul{margin:0 0 6px;padding-left:17px}
+.ag-pos-open-note li{margin:2px 0}
+.ag-pos-open-note span{color:#8a6a22}
+
+/* v95 - the Point of Sale landing the opening dialog sits on */
+.agriventure-app .ag-pos-landing{display:grid;place-items:center;min-height:min(60vh,460px);padding:24px}
+.agriventure-app .ag-pos-card{background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:16px;padding:38px 42px;text-align:center;max-width:420px;box-shadow:0 1px 2px rgba(20,33,31,.05),0 12px 32px -18px rgba(20,33,31,.25)}
+.agriventure-app .ag-pos-icon{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 16px;border-radius:16px;background:var(--ag-primary-soft);color:var(--ag-primary)}
+.agriventure-app .ag-pos-icon svg{width:26px;height:26px}
+.agriventure-app .ag-pos-card h1{margin:0 0 8px;font-size:19px;font-weight:750;letter-spacing:-.02em;color:var(--ag-text)}
+.agriventure-app .ag-pos-card p{margin:0 0 20px;font-size:12px;color:var(--ag-muted);line-height:1.6}
+.agriventure-app .ag-pos-card .ag-pos-start{width:100%;justify-content:center}
+
+/* v99 - Reports group and the KPI dashboard */
+.agriventure-app.ag-reports-collapsed .ag-reports-list{display:none!important}
+.agriventure-app.ag-transactions-collapsed .ag-nav-heading[data-action=toggle-reports] svg{transform:none}
+.agriventure-app.ag-reports-collapsed .ag-nav-heading[data-action=toggle-reports] svg{transform:rotate(-90deg)}
+
+.agriventure-app .ag-kpi-date{display:flex;align-items:center;gap:9px}
+.agriventure-app .ag-kpi-date span{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ag-muted)}
+.agriventure-app .ag-kpi-date input{height:36px;border:1px solid var(--ag-border);border-radius:9px;padding:0 10px;background:var(--ag-panel);color:var(--ag-text);font-size:12px}
+
+.agriventure-app .ag-kpi-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));margin-bottom:30px}
+.agriventure-app .ag-kpi-card{position:relative;background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:13px;padding:16px 18px 16px 21px;overflow:hidden}
+.agriventure-app .ag-kpi-card::before{content:"";position:absolute;inset:0 auto 0 0;width:5px;background:var(--ag-kpi-accent,var(--ag-primary))}
+.agriventure-app .ag-kpi-label{display:block;font-size:11px;font-weight:600;color:var(--ag-muted);margin-bottom:9px}
+.agriventure-app .ag-kpi-value{display:block;font-size:26px;font-weight:750;letter-spacing:-.03em;color:var(--ag-text);line-height:1.1}
+.agriventure-app .ag-kpi-card small{display:block;margin-top:7px;font-size:10px;color:var(--ag-muted);line-height:1.5}
+.agriventure-app .ag-kpi-green{--ag-kpi-accent:#1f9d55}
+.agriventure-app .ag-kpi-blue{--ag-kpi-accent:#2f6fed}
+.agriventure-app .ag-kpi-teal{--ag-kpi-accent:#0f9b8e}
+.agriventure-app .ag-kpi-amber{--ag-kpi-accent:#d99418}
+.agriventure-app .ag-kpi-red{--ag-kpi-accent:#d94f45}
+
+.agriventure-app .ag-kpi-heading{margin:0 0 13px;font-size:13px;font-weight:700;color:var(--ag-text)}
+.agriventure-app .ag-kpi-tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(128px,1fr))}
+.agriventure-app .ag-kpi-tile{background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:13px;padding:17px 12px;display:flex;flex-direction:column;align-items:center;gap:9px;font-size:11px;font-weight:600;color:var(--ag-text);cursor:pointer;text-align:center}
+.agriventure-app .ag-kpi-tile:hover{border-color:#bdb5ff;background:#faf9ff}
+.agriventure-app .ag-kpi-tile-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--ag-primary-soft);color:var(--ag-primary)}
+.agriventure-app .ag-kpi-tile-icon svg{width:16px;height:16px}
+
+/* v101 - report views: summary cards, charts and the data table */
+.agriventure-app .ag-rep-cards{display:grid;gap:13px;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));margin-bottom:18px}
+.agriventure-app .ag-rep-card{background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:12px;padding:15px 14px;text-align:center}
+.agriventure-app .ag-rep-card b{display:block;font-size:23px;font-weight:750;letter-spacing:-.03em;color:var(--ag-primary);line-height:1.15}
+.agriventure-app .ag-rep-card span{display:block;margin-top:5px;font-size:10px;color:var(--ag-muted)}
+
+.agriventure-app .ag-rep-chart-card{background:var(--ag-panel);border:1px solid var(--ag-border);border-radius:12px;padding:12px 14px 16px;margin-bottom:16px}
+.agriventure-app .ag-rep-chart-title{text-align:center;font-size:12px;font-weight:700;color:var(--ag-text);margin-top:4px}
+
+.agriventure-app .ag-rep-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;margin:20px 0 11px}
+.agriventure-app .ag-rep-table{border:1px solid var(--ag-border);border-radius:12px;overflow-x:auto;background:var(--ag-panel)}
+.agriventure-app .ag-rep-table table{width:100%;border-collapse:collapse;font-size:12px}
+.agriventure-app .ag-rep-table th{background:var(--ag-bg);border-bottom:1px solid var(--ag-border);padding:10px 12px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ag-muted);white-space:nowrap}
+.agriventure-app .ag-rep-table td{padding:9px 12px;border-bottom:1px solid var(--ag-border);color:var(--ag-text);white-space:nowrap}
+.agriventure-app .ag-rep-table tbody tr:last-child td{border-bottom:0}
+.agriventure-app .ag-rep-table .ag-align-center{text-align:center}
+.agriventure-app .ag-rep-table .ag-align-right{text-align:right}
+.agriventure-app .ag-rep-empty{padding:26px;text-align:center;font-size:12px;color:var(--ag-muted);border:1px dashed var(--ag-border);border-radius:12px}
+
+/* v102 - report cards follow the workspace accent, and stand a little taller */
+.agriventure-app .ag-rep-card{min-height:96px;padding:20px 16px;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.agriventure-app .ag-rep-card b{font-size:26px;color:var(--ag-primary)}
+.agriventure-app .ag-rep-card span{margin-top:0;font-size:11px}
+.agriventure-app .ag-kpi-card{min-height:112px;padding:19px 20px 19px 23px;display:flex;flex-direction:column;justify-content:center}
+.agriventure-app .ag-kpi-value{font-size:28px}
+.agriventure-app .ag-kpi-blue{--ag-kpi-accent:#5b45e8}
+.agriventure-app .ag-kpi-teal{--ag-kpi-accent:#3aa3c9}
+.agriventure-app .ag-kpi-green{--ag-kpi-accent:#7b68ee}
+.agriventure-app .ag-kpi-amber{--ag-kpi-accent:#8b7cf0}
+.agriventure-app .ag-kpi-red{--ag-kpi-accent:#9d8df3}
+
+/* v103 - report filter row lines up exactly like the list toolbar */
+.agriventure-app .ag-report-slot{min-width:0;width:100%}
+.agriventure-app .ag-filter-date-input{width:100%;height:38px;min-height:38px;padding:0 11px;border:1px solid var(--ag-border);border-radius:9px;background:var(--ag-bg);color:var(--ag-text);font-size:12px;outline:0}
+.agriventure-app .ag-filter-date-input:focus{border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08)}
+.ag-dark .ag-filter-date-input{background:#141b26!important;color:#eef2f9!important;border-color:#303a4d!important}
+
+/* v104 - report empty state */
+.agriventure-app .ag-rep-empty{display:flex;flex-direction:column;align-items:center;gap:9px;padding:34px 22px}
+.agriventure-app .ag-rep-empty b{font-size:13px;font-weight:700;color:var(--ag-text)}
+.agriventure-app .ag-rep-empty span{font-size:11px;color:var(--ag-muted);text-align:center;max-width:52ch;line-height:1.6}
+.agriventure-app .ag-rep-clear{white-space:nowrap}
+
+/* v107 - shared report pagination */
+.agriventure-app .ag-rep-pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px 0;margin-top:11px;border-top:1px solid var(--ag-border)}
+.agriventure-app .ag-rep-pagesize{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ag-muted);margin:0}
+.agriventure-app .ag-rep-size{height:30px;border:1px solid var(--ag-border);border-radius:8px;padding:0 8px;background:var(--ag-panel);color:var(--ag-text);font-size:11px}
+.agriventure-app .ag-rep-count{font-size:11px;color:var(--ag-muted)}
+.agriventure-app .ag-rep-pagenav{display:flex;align-items:center;gap:9px}
+.agriventure-app .ag-rep-pagenav b{font-size:11px;font-weight:600;color:var(--ag-text);white-space:nowrap}
+.agriventure-app .ag-rep-pagenav .ag-button{height:30px;min-height:30px;font-size:11px}
+.agriventure-app .ag-rep-pagenav .ag-button[disabled]{opacity:.45;cursor:not-allowed}
+.agriventure-app .ag-rep-from.is-invalid,.agriventure-app .ag-rep-to.is-invalid{border-color:#d94f45;box-shadow:0 0 0 3px rgba(217,79,69,.1)}
+
+/* v108 - production report: view modes, column search, footer totals */
+.agriventure-app .ag-rep-modes{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:16px 0 14px}
+.agriventure-app .ag-rep-mode-spacer{flex:1 1 auto}
+.agriventure-app .ag-col-search-row td{padding:5px 6px!important;background:var(--ag-bg)!important;border-bottom:1px solid var(--ag-border)}
+.agriventure-app .ag-col-search{width:100%;min-width:80px;height:28px;border:1px solid var(--ag-border);border-radius:7px;padding:0 8px;background:var(--ag-panel);color:var(--ag-text);font-size:11px;outline:0}
+.agriventure-app .ag-col-search:focus{border-color:#aaa0fa;box-shadow:0 0 0 2px rgba(91,69,232,.09)}
+.agriventure-app .ag-rep-table tfoot td{background:var(--ag-primary-soft);font-weight:700;color:var(--ag-text);border-top:1px solid var(--ag-border);border-bottom:0}
+.agriventure-app .ag-rep-link{color:var(--ag-primary);font-weight:600}
+.agriventure-app .ag-rep-nochart{padding:34px;text-align:center;font-size:12px;color:var(--ag-muted)}
+.agriventure-app .ag-rep-chart .graph-svg-tip{z-index:1200}
+
+/* v110 - sales report status badges */
+.agriventure-app .ag-badge{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:3px 8px;white-space:nowrap;border:1px solid transparent}
+.agriventure-app .ag-badge-green{background:#e3f6ea;color:#1c7a3e;border-color:#b6e6c6}
+.agriventure-app .ag-badge-red{background:#fdeaea;color:#a5312a;border-color:#f6c9c6}
+.agriventure-app .ag-badge-grey{background:var(--ag-bg);color:var(--ag-muted);border-color:var(--ag-border)}
+.agriventure-app .ag-col-search::placeholder{color:#b6bccb}
+
+/* v112 - Report reads as a section heading, but it is the link itself */
+.agriventure-app .ag-nav-heading-link{cursor:pointer;width:100%;justify-content:flex-start;border-radius:9px;padding:7px 5px;transition:color .15s}
+.agriventure-app .ag-nav-heading-link:hover{color:var(--ag-primary)}
+.agriventure-app .ag-nav-heading-link.active,.agriventure-app .ag-nav-heading-link.active:hover{color:var(--ag-primary);font-weight:750}
+.ag-dark .agriventure-app .ag-nav-heading-link.active{color:#bdb2ff}
+
+/* v115 - report page head keeps the title left and the way back on the right */
+.agriventure-app .ag-page-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.agriventure-app .ag-rep-back{white-space:nowrap}
+
+/* v116 - Stock group, and a Stock Entry reference that opens inside the workspace */
+.agriventure-app.ag-stock-collapsed .ag-stock-list{display:none!important}
+.agriventure-app.ag-transactions-collapsed .ag-nav-heading[data-action=toggle-stock] svg{transform:none}
+.agriventure-app.ag-stock-collapsed .ag-nav-heading[data-action=toggle-stock] svg{transform:rotate(-90deg)}
+.agriventure-app .ag-se-link{color:var(--ag-primary)!important;font-weight:600;cursor:pointer}
+.agriventure-app .ag-se-link:hover{text-decoration:underline}
+.agriventure-app .ag-se-link:focus-visible{outline:2px solid var(--ag-primary);outline-offset:2px;border-radius:6px}
+.agriventure-app .ag-se-jump{border:0;background:none;padding:0;font:inherit;font-size:12px;color:var(--ag-primary);font-weight:600;cursor:pointer;text-align:left}
+.agriventure-app .ag-se-jump:hover{text-decoration:underline}
+
+/* v135 - the financial year badge is a picker */
+.agriventure-app .ag-financial-year{min-width:132px}
+.agriventure-app .ag-fy-slot{margin-top:4px;text-align:left}
+.agriventure-app .ag-fy-slot .form-control,.agriventure-app .ag-fy-slot .input-with-feedback{height:34px;min-height:34px;font-weight:700;text-align:center}
+
+/* v138 - a report table's closing totals row */
+.agriventure-app .ag-rep-table tfoot .ag-rep-total td{border-top:2px solid var(--ag-border);background:var(--ag-primary-soft);color:#31384a;font-weight:750}
+
+/* v142 - a switched-off POS Profile reads as muted, not as an error */
+.agriventure-app .ag-status-pill.disabled{background:#eef1f6;color:#6b7488}
+.ag-dark .agriventure-app .ag-status-pill.disabled,.ag-dark .ag-status-pill.disabled{background:rgba(120,132,155,.2);color:#a6b0c4}
+
+/* v155 - the whole list row opens its document */
+.agriventure-app .ag-table-wrap tbody tr.ag-row-open{cursor:pointer}
+.agriventure-app .ag-table-wrap tbody tr.ag-row-open .ag-row-delete{cursor:pointer}
+
+/* v156 - a checkbox's description belongs under it, not trailing off its label */
+.agriventure-app .ag-form-grid .checkbox{display:block}
+.agriventure-app .ag-form-grid .checkbox label{display:inline-flex;align-items:center;gap:8px;margin:0}
+.agriventure-app .ag-form-grid .checkbox .help-box{display:block;margin:5px 0 0 23px;max-width:560px;font-size:10px;line-height:1.45;color:var(--ag-muted)}
+/* two child tables sharing a row keep the table itself from forcing the column wider */
+.agriventure-app .ag-field-slot.ag-field-half{min-width:0}
+.agriventure-app .ag-field-slot.ag-field-half .ag-child-table table{min-width:0}
+
+/* v161 - this workspace's dialogs use its own primary colour */
+.ag-dialog .btn-primary,.ag-dialog .btn-modal-primary{background:#4935cf!important;border-color:#4935cf!important;color:#fff!important}
+.ag-dialog .btn-primary:hover,.ag-dialog .btn-modal-primary:hover{background:#3d2cb0!important;border-color:#3d2cb0!important}
+.ag-dialog .btn-primary:focus-visible{outline:2px solid #4935cf;outline-offset:2px}
+
+/* v164 - the open-link arrow sits on the field's centre line */
+.agriventure-app .ag-form-grid .link-btn,.agriventure-app .ag-child-table .link-btn,.ag-dialog .link-btn{
+	top:50%!important;bottom:auto!important;transform:translateY(-50%)!important;right:8px}
+.agriventure-app .link-btn .btn-open,.ag-dialog .link-btn .btn-open{display:inline-flex;align-items:center;line-height:1}
+
+/* v164 - every search dropdown reads like a plain, clean list */
+.agriventure-app .awesomplete>ul,.ag-dialog .awesomplete>ul{
+	margin-top:2px;padding:4px 0;border:1px solid #c8ccd4;border-radius:6px;background:#fff;
+	box-shadow:0 6px 18px rgba(20,25,40,.14)}
+.agriventure-app .awesomplete>ul::before,.ag-dialog .awesomplete>ul::before{display:none}
+.agriventure-app .awesomplete>ul>li,.ag-dialog .awesomplete>ul>li{
+	padding:6px 12px;border-radius:0;font-size:12px;line-height:1.5;color:#1f2533}
+.agriventure-app .awesomplete>ul>li[aria-selected="true"],.agriventure-app .awesomplete>ul>li:hover,
+.ag-dialog .awesomplete>ul>li[aria-selected="true"],.ag-dialog .awesomplete>ul>li:hover{
+	background:#eef0fb;color:#1f2533}
+.agriventure-app .awesomplete>ul>li mark,.ag-dialog .awesomplete>ul>li mark{
+	background:transparent;color:inherit;font-weight:700}
+.agriventure-app .awesomplete>ul>li[aria-selected="true"] .link-option,
+
+/* v166 - the blank row reads first. It stays last in the DOM on purpose: Awesomplete
+   maps a clicked row to its suggestion by sibling index, so only the painting order moves. */
+.agriventure-app .awesomplete>ul:not([hidden]):not(:empty),.ag-dialog .awesomplete>ul:not([hidden]):not(:empty){display:flex;flex-direction:column}
+.agriventure-app .awesomplete>ul>li,.ag-dialog .awesomplete>ul>li{flex:0 0 auto;min-height:0}
+.agriventure-app .awesomplete>ul>li p,.ag-dialog .awesomplete>ul>li p{margin:0}
+.agriventure-app .awesomplete>ul>li a,.ag-dialog .awesomplete>ul>li a{display:block;text-decoration:none;color:inherit}
+.agriventure-app .awesomplete>ul>li.ag-combo-blank,.ag-dialog .awesomplete>ul>li.ag-combo-blank{order:-1;min-height:26px}
+
+/* v169 - A Link dropdown's rows are [role="option"] divs, not <li>; only Autocomplete uses
+   real list items. Frappe's own stylesheet targets both, and so must this one - without it
+   those rows had no shrink protection inside the flex list and their text was clipped. */
+.agriventure-app .awesomplete>ul>[role="option"],.ag-dialog .awesomplete>ul>[role="option"]{
+	flex:0 0 auto;min-height:0;padding:6px 12px;border-radius:0;font-size:12px;line-height:1.5;color:#1f2533}
+.agriventure-app .awesomplete>ul>[role="option"] p,.ag-dialog .awesomplete>ul>[role="option"] p{margin:0}
+.agriventure-app .awesomplete>ul>[role="option"] a,.ag-dialog .awesomplete>ul>[role="option"] a{display:block;text-decoration:none;color:inherit}
+.agriventure-app .awesomplete>ul>[role="option"][aria-selected="true"],.agriventure-app .awesomplete>ul>[role="option"]:hover,
+.ag-dialog .awesomplete>ul>[role="option"][aria-selected="true"],.ag-dialog .awesomplete>ul>[role="option"]:hover{
+	background:#eef0fb;color:#1f2533}
+.agriventure-app .awesomplete>ul>[role="option"] mark,.ag-dialog .awesomplete>ul>[role="option"] mark{
+	background:transparent;color:inherit;font-weight:700}
+/* the rows Frappe appends for actions keep their muted look rather than the option colour */
+.agriventure-app .awesomplete>ul>li:not([role="option"]):not(.ag-combo-blank),
+.ag-dialog .awesomplete>ul>li:not([role="option"]):not(.ag-combo-blank){flex:0 0 auto}
+
+/* v187 - the Connections tab */
+.agriventure-app .ag-conn-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:22px 26px;padding:18px}
+.agriventure-app .ag-conn-group h4{margin:0 0 10px;color:#657087;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.agriventure-app .ag-conn-chips{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.agriventure-app .ag-conn-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:6px 12px;border:1px solid var(--ag-border);border-radius:999px;background:var(--ag-panel);color:var(--ag-muted);font:inherit;font-size:11px;font-weight:600;cursor:pointer;text-align:left}
+.agriventure-app .ag-conn-chip:hover{border-color:#bdb5ff;color:var(--ag-primary)}
+.agriventure-app .ag-conn-chip.has-links{color:#31384a}
+.agriventure-app .ag-conn-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--ag-primary-soft);color:var(--ag-primary);font-size:10px;font-weight:800}
+.agriventure-app .ag-conn-loading,.agriventure-app .ag-conn-empty{padding:26px;color:var(--ag-muted);font-size:12px}
+
+/* v188 - a collapsible section header is a <button>, so the desk's button chrome can leak
+   in behind it. It is pinned to look exactly like a plain section header instead. */
+.agriventure-app .ag-collapse-header{background:transparent!important;box-shadow:none!important;border-radius:0!important;padding:0 12px!important;gap:10px}
+.agriventure-app .ag-collapse-header:hover,.agriventure-app .ag-collapse-header:focus{background:transparent!important;box-shadow:none!important}
+.agriventure-app .ag-collapse-header h2{color:#31384a;font-size:12px}
+.ag-dark .agriventure-app .ag-collapse-header h2{color:var(--ag-text)}
+
+/* v189 - nothing inside the collapsible header carries a background of its own either.
+   The desk styles plain <button> elements, and this header is one. */
+.agriventure-app .ag-collapse-header,
+.agriventure-app .ag-collapse-header *,
+.agriventure-app .ag-collapse-header:hover *,
+.agriventure-app .ag-collapse-header:focus,
+.agriventure-app .ag-collapse-header:focus-visible,
+.agriventure-app .ag-collapse-header:active{background:transparent!important;background-image:none!important;box-shadow:none!important;border-color:transparent}
+.agriventure-app .ag-collapse-header{border-bottom-color:var(--ag-border)!important}
+
+/* v196 - the Material Request list's Title column, and the Connections picker */
+.agriventure-app .ag-table-wrap[data-kind="material-request"] th.ag-col-title,
+.agriventure-app .ag-table-wrap[data-kind="material-request"] td.ag-col-title{width:34%}
+.agriventure-app .ag-table-wrap[data-kind="material-request"] th.ag-col-transaction_date,
+.agriventure-app .ag-table-wrap[data-kind="material-request"] td.ag-col-transaction_date{width:10%;white-space:nowrap}
+.agriventure-app .ag-table-wrap[data-kind="material-request"] th.ag-col-workflow_state,
+.agriventure-app .ag-table-wrap[data-kind="material-request"] td.ag-col-workflow_state,
+.agriventure-app .ag-table-wrap[data-kind="material-request"] th.ag-col-status,
+.agriventure-app .ag-table-wrap[data-kind="material-request"] td.ag-col-status{width:11%;white-space:nowrap}
+.ag-dialog .ag-conn-list{display:flex;flex-direction:column;gap:8px}
+.ag-dialog .ag-conn-link{padding:9px 13px;border:1px solid #e4e6ef;border-radius:9px;background:#fff;color:#31384a;font:inherit;font-size:12px;font-weight:600;text-align:left;cursor:pointer}
+.ag-dialog .ag-conn-link:hover{border-color:#bdb5ff;color:#4935cf}
+.ag-po-chip{-webkit-appearance:none;appearance:none;border:0!important;background:transparent!important;box-shadow:none!important;outline:0!important;color:var(--ag-teal)!important;font-weight:750;padding:0;margin:0 8px 0 0;font:inherit;font-size:inherit;line-height:inherit;text-align:left;cursor:pointer}.ag-po-chip:hover,.ag-po-chip:focus{text-decoration:underline;color:var(--ag-teal)!important}.ag-po-chip:last-child{margin-right:0}
+/* Status pill colors matched to Frappe/ERPNext's own indicator palette: Draft and
+   Cancelled use the core red default (frappe/model/indicator.js); To Bill etc. use
+   Warning/orange as ERPNext's purchase_receipt_list.js and purchase_order_list.js
+   define; Approved/Completed use Success/green; Pending and the approval-chain
+   states use the Workflow State master's default gray (no style configured there). */
+.ag-status-pill.draft,.ag-status-pill.cancelled,.ag-status-pill.rejected{background:#fff0f0;color:#b52a2a}
+.ag-status-pill.to-bill,.ag-status-pill.on-hold,.ag-status-pill.to-receive,.ag-status-pill.to-receive-and-bill{background:#fff1e7;color:#bd3e0c}
+.ag-status-pill.partly-billed{background:#fff7d3;color:#ab6e05}
+.ag-status-pill.completed,.ag-status-pill.closed,.ag-status-pill.approved,.ag-status-pill.delivered{background:#e4f5e9;color:#16794c}
+.ag-status-pill.pending,.ag-status-pill.l1-approval-pending,.ag-status-pill.l2-approval-pending,.ag-status-pill.return,.ag-status-pill.return-issued{background:#f3f3f3;color:#525252}
+
+/* v202 - the Purchase Invoice statuses, in the colours ERPNext's own list uses
+   (erpnext/accounts/doctype/purchase_invoice/purchase_invoice_list.js): Unpaid orange,
+   Paid green, Overdue red, Partly Paid yellow, and the grey family for a return, a debit
+   note, an internal transfer and a hold. Without a rule of their own every one of them
+   fell through to the default pill, which is green - so an Overdue invoice read as paid. */
+.ag-status-pill.unpaid{background:#fff1e7;color:#bd3e0c}
+.ag-status-pill.paid{background:#e4f5e9;color:#16794c}
+.ag-status-pill.overdue{background:#fff0f0;color:#b52a2a}
+.ag-status-pill.partly-paid{background:#fff7d3;color:#ab6e05}
+.ag-status-pill.debit-note-issued,.ag-status-pill.internal-transfer,
+.ag-status-pill.temporarily-on-hold{background:#f3f3f3;color:#525252}
+
+/* v203 - the Centre & Location coordinate pickers */
+.agriventure-app .ag-geo-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:4px}
+.agriventure-app .ag-geo-note{color:var(--ag-muted);font-size:11px}
+.ag-dialog .ag-geo-map-box{height:420px;border:1px solid #e4e6ef;border-radius:10px;overflow:hidden}
+.ag-dialog .ag-geo-readout{margin:10px 0 0;color:#657087;font-size:11px;font-weight:600}
+/* Leaflet paints its panes absolutely; the dialog's own stacking must not sit over them */
+.ag-dialog .ag-geo-map-box .leaflet-container{height:100%;width:100%;font:inherit}
+
+/* v204 - searching a place by name inside the map picker */
+.ag-dialog .ag-geo-search{display:flex;gap:8px;margin-bottom:8px}
+.ag-dialog .ag-geo-query{flex:1;height:36px;padding:0 12px;border:1px solid #e4e6ef;border-radius:9px;background:#fff;color:#31384a;font:inherit;font-size:12px;outline:0}
+.ag-dialog .ag-geo-query:focus{border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08)}
+.ag-dialog .ag-geo-results{display:flex;flex-direction:column;gap:6px;max-height:150px;overflow-y:auto;margin-bottom:10px}
+.ag-dialog .ag-geo-results:empty{margin-bottom:0}
+.ag-dialog .ag-geo-hit{padding:8px 11px;border:1px solid #e4e6ef;border-radius:8px;background:#fff;color:#465067;font:inherit;font-size:11px;line-height:1.4;text-align:left;cursor:pointer}
+.ag-dialog .ag-geo-hit:hover{border-color:#bdb5ff;color:#4935cf}
+.ag-dialog .ag-geo-hit.chosen{border-color:#4935cf;background:#f3f1ff;color:#4935cf;font-weight:600}
+.ag-dialog .ag-geo-msg{margin:0;padding:6px 2px;color:#7f889c;font-size:11px}
+
+/* v212 - the cheapest Supplier Quotation on screen. The hover rule below repeats the
+   colours because a plain tr:hover td would otherwise paint over the highlight. */
+.agriventure-app .ag-table-wrap td.ag-lowest,
+.agriventure-app .ag-table-wrap tbody tr:hover td.ag-lowest{background:#e4f5e9;color:#16794c;font-weight:800}
