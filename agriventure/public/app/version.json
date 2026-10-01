@@ -1,0 +1,6 @@
+{
+  "version": "1.0.7",
+  "versionCode": 8,
+  "url": "https://agriventure.raisoni.net/m",
+  "notes": "Redesigned report + document screens, pull-to-refresh, one-tap back, and refresh now always pulls the latest from the server"
+}

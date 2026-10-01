@@ -2,6 +2,7 @@
 
 import inspect
 import json
+import re
 from datetime import datetime, timedelta
 
 import frappe
@@ -9,64 +10,359 @@ from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
 
-# Step one: the transaction documents, every one of them a stock ERPNext doctype that
-# the target site already has. The page hides any kind that is not listed here, so the
-# rest of the sidebar simply does not appear until it is added back.
-DOCTYPES = {'material-request': {'doctype': 'Material Request',
-                      'title': 'Material Request',
-                      'date_field': 'transaction_date',
-                      'search_fields': ['name', 'title', 'custom_department'],
-                      'columns': ['title', 'transaction_date', 'workflow_state', 'status', 'name']},
- 'supplier-quotation': {'doctype': 'Supplier Quotation',
-                        'title': 'Supplier Quotation',
-                        'date_field': 'transaction_date',
-                        'search_fields': ['name', 'supplier', 'supplier_name'],
-                        'columns': ['name',
-                                    'transaction_date',
-                                    'supplier',
-                                    'valid_till',
-                                    'grand_total',
-                                    'status']},
- 'purchase-order': {'doctype': 'Purchase Order',
-                    'title': 'Purchase Order',
-                    'date_field': 'transaction_date',
-                    'search_fields': ['name', 'supplier', 'supplier_name'],
-                    'columns': ['supplier_name',
-                                'status',
-                                'transaction_date',
-                                'grand_total',
-                                'per_billed',
-                                'name']},
- 'purchase-receipt': {'doctype': 'Purchase Receipt',
-                      'title': 'Purchase Receipt',
-                      'date_field': 'posting_date',
-                      'search_fields': ['name', 'supplier', 'supplier_name'],
-                      'columns': ['supplier_name',
-                                  'status',
-                                  'posting_date',
-                                  'grand_total',
-                                  'per_returned',
-                                  'custom_purchase_orders',
-                                  'name']},
- 'purchase-invoice': {'doctype': 'Purchase Invoice',
-                      'title': 'Purchase Invoice',
-                      'date_field': 'posting_date',
-                      'search_fields': ['name', 'supplier', 'supplier_name', 'bill_no'],
-                      'columns': ['supplier_name',
-                                  'status',
-                                  'posting_date',
-                                  'grand_total',
-                                  'name']},
- 'payment-entry': {'doctype': 'Payment Entry',
-                   'title': 'Payment Entry',
-                   'date_field': 'posting_date',
-                   'search_fields': ['name', 'party', 'party_name', 'reference_no'],
-                   'columns': ['party_name',
-                               'status',
-                               'payment_type',
-                               'posting_date',
-                               'mode_of_payment',
-                               'name']}}
+DOCTYPES = {
+	"material-request": {
+		"doctype": "Material Request",
+		"title": "Material Request",
+		"date_field": "transaction_date",
+		"search_fields": ["name", "title", "custom_department"],
+		"columns": ["title", "transaction_date", "workflow_state", "status", "name"],
+	},
+	"supplier-quotation": {
+		"doctype": "Supplier Quotation",
+		"title": "Supplier Quotation",
+		"date_field": "transaction_date",
+		"search_fields": ["name", "supplier", "supplier_name"],
+		"columns": ["name", "transaction_date", "supplier", "valid_till", "grand_total", "status"],
+	},
+	"purchase-order": {
+		"doctype": "Purchase Order",
+		"title": "Purchase Order",
+		"date_field": "transaction_date",
+		"search_fields": ["name", "supplier", "supplier_name"],
+		"columns": ["supplier_name", "status", "pr_status", "transaction_date", "grand_total", "per_billed", "name"],
+	},
+	"purchase-receipt": {
+		"doctype": "Purchase Receipt",
+		"title": "Purchase Receipt",
+		"date_field": "posting_date",
+		"search_fields": ["name", "supplier", "supplier_name"],
+		"columns": [
+			"supplier_name", "status", "posting_date", "grand_total", "per_returned",
+			"custom_purchase_orders", "name",
+		],
+	},
+	"purchase-invoice": {
+		"doctype": "Purchase Invoice",
+		"title": "Purchase Invoice",
+		"date_field": "posting_date",
+		"search_fields": ["name", "supplier", "supplier_name", "bill_no"],
+		"columns": ["supplier_name", "status", "posting_date", "grand_total", "name"],
+	},
+	"payment-entry": {
+		"doctype": "Payment Entry",
+		"title": "Payment Entry",
+		"date_field": "posting_date",
+		"search_fields": ["name", "party", "party_name", "reference_no"],
+		"columns": ["party_name", "status", "payment_type", "posting_date", "mode_of_payment", "name"],
+	},
+	# Master data. These carry no transaction date, no status and cannot be submitted,
+	# so date_field falls back to `creation` purely to keep the shared helpers happy -
+	# the portal never renders a date filter for them.
+	"payment-request": {
+		"doctype": "Payment Request",
+		"title": "Payment Request",
+		"date_field": "transaction_date",
+		"search_fields": ["name", "party", "party_name", "reference_name"],
+		"columns": ["name", "transaction_date", "party_type", "party",
+			"reference_doctype", "reference_name", "grand_total",
+			"outstanding_amount", "status"],
+	},
+	"journal-entry": {
+		"doctype": "Journal Entry",
+		"title": "Journal Entry",
+		"date_field": "posting_date",
+		"search_fields": ["name", "title", "cheque_no", "user_remark"],
+		# `title` is the party or account the entry reads as - ERPNext fills it from
+		# the rows themselves, and it is what the desk list shows as well
+		"columns": ["name", "posting_date", "voucher_type", "title",
+			"total_debit", "total_credit"],
+	},
+	"field-details": {
+		"doctype": "Field Details",
+		"title": "Field Details",
+		"date_field": "creation",
+		"search_fields": ["name", "name_of_field", "centre__location_fd", "gps_location"],
+		"columns": ["name", "centre__location_fd", "name_of_field", "gps_location"],
+	},
+	"labour-details": {
+		"doctype": "Labour Information",
+		"title": "Labour Details",
+		"date_field": "creation",
+		"search_fields": ["name", "first_name", "middle_name", "last_name", "name_of_person", "aadhar_card_number"],
+		"columns": ["name", "first_name", "last_name", "agency_payroll", "aadhar_card_number", "daily_wage_rate"],
+	},
+	"supervisor-details": {
+		"doctype": "Supervisor Details",
+		"title": "Supervisor Details",
+		"date_field": "creation",
+		"search_fields": ["name", "name_of_supervisor", "centre__location"],
+		"columns": ["name", "name_of_supervisor", "centre__location"],
+	},
+	"centre-location-details": {
+		"doctype": "Centre and Location Details",
+		"title": "Centre and Location Details",
+		"date_field": "creation",
+		"search_fields": ["name", "name_of_centrelocation", "description"],
+		"columns": ["name", "name_of_centrelocation", "latitude", "longitude"],
+	},
+	"category-details": {
+		"doctype": "Category Master",
+		"title": "Category Details",
+		"date_field": "creation",
+		"search_fields": ["name", "agricultural_activity"],
+		"columns": ["name", "agricultural_activity"],
+	},
+	# an attendance log is not submittable either, but it does have a real date, so the
+	# From/To filters stay - the toolbar drops them only where date_field is `creation`
+	"attendance-log": {
+		"doctype": "Attendance Log",
+		"title": "Attendance Log",
+		"date_field": "date_al",
+		"search_fields": ["name", "name_of_person_al", "centre__location_al"],
+		"columns": ["name", "date_al", "name_of_person_al", "centre__location_al", "log_in_al", "log_out_al", "working_hours_al", "login_status_al"],
+	},
+	"shift-details": {
+		"doctype": "Shift Details",
+		"title": "Shift Details",
+		"date_field": "date_sd",
+		"search_fields": ["name", "centre__location_sd", "remark"],
+		# parent fields only - the assignment rows belong on the form, not
+		# strung into one cell here
+		"columns": ["name", "date_sd", "centre__location_sd"],
+	},
+	"harvest-log": {
+		"doctype": "Harvest Log",
+		"title": "Harvest Log",
+		"date_field": "date_hl",
+		"search_fields": ["name", "centre__location_hl", "name_of_field_hl"],
+		"columns": ["name", "date_hl", "centre__location_hl", "name_of_field_hl", "total_usable_quantity_hl"],
+	},
+	"spraying-log": {
+		"doctype": "Spraying Log",
+		"title": "Spraying Log",
+		"date_field": "date_spl",
+		"search_fields": ["name", "centre__location_spl", "name_of_field_spl"],
+		"columns": ["name", "date_spl", "centre__location_spl", "name_of_field_spl", "total_quantity_spl"],
+	},
+	"sowing-log": {
+		"doctype": "Sowing Log",
+		"title": "Sowing Log",
+		"date_field": "date_sl",
+		"search_fields": ["name", "centre__location_sl", "name_of_field_sl"],
+		"columns": ["name", "date_sl", "centre__location_sl", "name_of_field_sl", "total_quantity_sl"],
+	},
+	# only the receipts a harvest posts; the issues raised by spraying, sowing and
+	# fertigation are not part of this view
+	"stock-entry": {
+		"doctype": "Stock Entry",
+		"title": "Stock Entry",
+		"date_field": "posting_date",
+		"search_fields": ["name", "stock_entry_type"],
+		"columns": ["name", "posting_date", "stock_entry_type", "total_incoming_value"],
+	},
+	# ---- Transport. These three belong to agriventure_nagpur_erp and are only read
+	# and written here; nothing about them is changed. Both fuel documents post their
+	# own Stock Entry from after_insert, which is why neither can be edited once it
+	# exists - their own desk forms lock themselves the same way.
+	"fuel-for-stock": {
+		"doctype": "Fuel for Stock",
+		"title": "Fuel for Stock",
+		"date_field": "date_ffs",
+		"search_fields": ["name", "vendor_name", "item"],
+		"columns": ["name", "date_ffs", "item", "vendor_name", "warehouse",
+			"quantity_ffs", "amountffs"],
+	},
+	"fuel-for-distribution": {
+		"doctype": "Fuel for Distribution",
+		"title": "Fuel for Distribution",
+		"date_field": "date",
+		"search_fields": ["name", "item", "purpose"],
+		"columns": ["name", "date", "item", "warehouse", "issued_quantity_ltr"],
+	},
+	"vehicle-details": {
+		"doctype": "Vehicle Details",
+		# a master: named after the vehicle itself, so it is dated by when it was added
+		"date_field": "creation",
+		"title": "Vehicle Details",
+		"search_fields": ["name", "license_plate", "employee_name"],
+		"columns": ["name", "vehicle_type", "model_name", "license_plate", "employee_name"],
+	},
+	"pos-profile": {
+		"doctype": "POS Profile",
+		"title": "POS Profile",
+		"date_field": "creation",
+		"search_fields": ["name", "company", "warehouse"],
+		"columns": ["name", "company", "warehouse", "disabled"],
+	},
+	"pos-opening-entry": {
+		"doctype": "POS Opening Entry",
+		"title": "POS Opening Entry",
+		"date_field": "posting_date",
+		"search_fields": ["name", "pos_profile", "user"],
+		"columns": ["name", "status", "period_start_date", "period_end_date", "posting_date", "pos_profile"],
+	},
+	"pos-closing-entry": {
+		"doctype": "POS Closing Entry",
+		"title": "POS Closing Entry",
+		"date_field": "posting_date",
+		"search_fields": ["name", "pos_profile", "user", "pos_opening_entry"],
+		"columns": ["name", "status", "period_start_date", "period_end_date", "posting_date", "pos_profile"],
+	},
+	# Written by the background job when a Closing Entry is submitted: it records which POS
+	# Invoices were merged into which consolidated Sales Invoice. Read only, since
+	# cancelling one would unwind that Sales Invoice and reopen the POS Invoices.
+	# The bills the till wrote. Read only here: a POS Invoice belongs to its shift, and
+	# cancelling one from outside would leave that shift's closing entry disagreeing.
+	"pos-invoice": {
+		"doctype": "POS Invoice",
+		"title": "POS Invoice",
+		"date_field": "posting_date",
+		"search_fields": ["name", "customer", "customer_name", "pos_profile"],
+		"columns": ["name", "posting_date", "customer", "pos_profile", "grand_total",
+			"paid_amount", "outstanding_amount", "status"],
+	},
+	# ---- Setup masters -------------------------------------------------------
+	# ERPNext's own masters, shown here so the workspace never has to send anyone to
+	# the Desk to add an item or a warehouse. Nothing is created or altered on these
+	# DocTypes - they are only read and written through ERPNext's own controllers, so
+	# every validation, permission and naming rule stays exactly where it already is.
+	# date_field is `creation` on all of them, which drops the From/To date filters.
+	"company": {
+		"doctype": "Company",
+		"title": "Company",
+		"date_field": "creation",
+		"search_fields": ["name", "abbr", "country"],
+		"columns": ["name", "abbr", "default_currency", "country", "parent_company"],
+	},
+	"item": {
+		"doctype": "Item",
+		"title": "Item",
+		"date_field": "creation",
+		"search_fields": ["name", "item_name", "item_group"],
+		"columns": ["name", "item_name", "item_group", "stock_uom", "is_stock_item", "disabled"],
+	},
+	"item-group": {
+		"doctype": "Item Group",
+		"title": "Item Group",
+		"date_field": "creation",
+		"search_fields": ["name", "item_group_name"],
+		"columns": ["name", "parent_item_group", "is_group"],
+	},
+	"warehouse": {
+		"doctype": "Warehouse",
+		"title": "Warehouse",
+		"date_field": "creation",
+		"search_fields": ["name", "warehouse_name", "company"],
+		"columns": ["name", "company", "parent_warehouse", "is_group", "disabled"],
+	},
+	"uom": {
+		"doctype": "UOM",
+		"title": "UOM",
+		"date_field": "creation",
+		"search_fields": ["name", "uom_name"],
+		"columns": ["name", "must_be_whole_number", "enabled"],
+	},
+	"brand": {
+		"doctype": "Brand",
+		"title": "Brand",
+		"date_field": "creation",
+		"search_fields": ["name", "brand"],
+		"columns": ["name", "description"],
+	},
+	"supplier": {
+		"doctype": "Supplier",
+		"title": "Supplier",
+		"date_field": "creation",
+		"search_fields": ["name", "supplier_name", "supplier_group"],
+		# the id and the name are the same words on every row here, so only the name is
+		# shown - which is what the Desk list does as well (supplier_name is the title field)
+		"columns": ["supplier_name", "supplier_group", "supplier_type", "country", "disabled"],
+	},
+	"supplier-group": {
+		"doctype": "Supplier Group",
+		"title": "Supplier Group",
+		"date_field": "creation",
+		"search_fields": ["name", "supplier_group_name"],
+		"columns": ["name", "parent_supplier_group", "is_group"],
+	},
+	"customer": {
+		"doctype": "Customer",
+		"title": "Customer",
+		"date_field": "creation",
+		"search_fields": ["name", "customer_name", "customer_group"],
+		"columns": ["name", "customer_name", "customer_group", "territory", "customer_type", "disabled"],
+	},
+	"customer-group": {
+		"doctype": "Customer Group",
+		"title": "Customer Group",
+		"date_field": "creation",
+		"search_fields": ["name", "customer_group_name"],
+		"columns": ["name", "parent_customer_group", "is_group"],
+	},
+	"price-list": {
+		"doctype": "Price List",
+		"title": "Price List",
+		"date_field": "creation",
+		"search_fields": ["name", "price_list_name", "currency"],
+		"columns": ["name", "currency", "buying", "selling", "enabled"],
+	},
+	"item-price": {
+		"doctype": "Item Price",
+		"title": "Item Price",
+		"date_field": "creation",
+		"search_fields": ["name", "item_code", "item_name", "price_list"],
+		"columns": ["name", "item_code", "item_name", "price_list", "price_list_rate", "valid_from", "valid_upto"],
+	},
+	"mode-of-payment": {
+		"doctype": "Mode of Payment",
+		"title": "Mode of Payment",
+		"date_field": "creation",
+		"search_fields": ["name", "mode_of_payment"],
+		"columns": ["name", "type", "enabled"],
+	},
+	# --------------------------------------------------------------------------
+	"address": {
+		"doctype": "Address",
+		"title": "Address",
+		"date_field": "creation",
+		"search_fields": ["name", "address_title", "address_line1", "city"],
+		"columns": ["name", "address_type", "address_line1", "city", "state",
+			"country", "pincode"],
+	},
+	"account": {
+		"doctype": "Account",
+		"title": "Account",
+		# a master, dated by when it was added
+		"date_field": "creation",
+		"search_fields": ["name", "account_name", "account_number"],
+		"columns": ["name", "account_number", "parent_account", "root_type",
+			"account_type", "is_group", "disabled"],
+	},
+	"cost-center": {
+		"doctype": "Cost Center",
+		"title": "Cost Center",
+		"date_field": "creation",
+		"search_fields": ["name", "cost_center_name", "cost_center_number"],
+		"columns": ["name", "cost_center_name", "cost_center_number",
+			"parent_cost_center", "company", "is_group", "disabled"],
+	},
+	"pos-invoice-merge-log": {
+		"doctype": "POS Invoice Merge Log",
+		"title": "POS Invoice Merge Log",
+		"date_field": "posting_date",
+		"search_fields": ["name", "customer", "pos_closing_entry", "consolidated_invoice"],
+		"columns": ["name", "posting_date", "customer", "pos_closing_entry", "consolidated_invoice"],
+	},
+	# no output summary on this one, so the list carries the field instead of a total
+	"fertigation-log": {
+		"doctype": "Fertigation Log",
+		"title": "Fertigation Log",
+		"date_field": "date_fl",
+		"search_fields": ["name", "centre__location_fl", "name_of_field_fl"],
+		"columns": ["name", "date_fl", "centre__location_fl", "name_of_field_fl", "warehouse_fl"],
+	},
+}
 
 MAPPERS = {
 	("Material Request", "Purchase Order"): "erpnext.stock.doctype.material_request.material_request.make_purchase_order",
@@ -128,6 +424,11 @@ PRESERVED_CHILD_FIELDS = {
 	"purchase_invoice", "purchase_invoice_item",
 	"sales_order", "sales_order_item",
 	"prevdoc_docname", "prevdoc_detail_docname",
+	# POS Closing Entry Detail's opening_amount is read-only and mandatory: fillPosClosing
+	# (agriventure.js) fetches it from the linked POS Opening Entry, but it is never typed
+	# by hand here either - same shape as the mapper-filled fields above, so it needs the
+	# same allowance or save fails with "Value missing for: Opening Amount".
+	"opening_amount",
 }
 
 # where a mandatory child field the workspace does not show can borrow its value from a sibling
@@ -178,6 +479,18 @@ def _complete_child_row(child_meta, row):
 # them as editable. Without listing them here the sanitizer would drop whatever was chosen.
 EDITABLE_READ_ONLY = {
 	"Material Request": {"material_request_type", "set_warehouse"},
+	# name_of_person is read-only because it is meant to be auto-built (see agriventure.js's
+	# applyFullName) from First/Middle/Last Name, never typed by hand - but it is also this
+	# doctype's autoname field ("field:name_of_person"), so Frappe requires it to be non-empty
+	# on save. Without listing it here the sanitizer drops the value the client computed,
+	# and save always fails with "Name of Person is required".
+	"Labour Information": {"name_of_person"},
+	# log_in_al is read-only (the face-verification login writes it, never the user) and its
+	# own default is "Now" - so when the sanitizer drops the clean "HH:MM:SS" the client just
+	# captured, Frappe falls back to its own Time default instead, which is Python's
+	# nowtime() ("%H:%M:%S.%f" - microseconds and all). Listing it here lets the client's own
+	# clean value through instead.
+	"Attendance Log": {"log_in_al"},
 }
 
 
@@ -195,8 +508,150 @@ def _field_dict(field):
 	return {key: getattr(field, key, None) for key in FIELD_PROPERTIES}
 
 
-def _valid_fields(meta, requested):
-	return [field for field in requested if field in STANDARD_FIELDS or meta.has_field(field)]
+# Columns the list works out rather than reads. They pass the field check and are filled
+# in per row; the field each one is derived from is fetched alongside.
+VIRTUAL_COLUMNS = {"pr_status": "per_received"}
+
+# Columns whose values live on a child table rather than on the document itself. A
+# Shift Details row carries a whole table of people and the tasks they were put on, so
+# the list joins them into one cell. Each entry names the child doctype, the parent
+# field the table hangs off, and the column inside it - or a pair of columns, read
+# out of the same row so that the two stay matched to each other.
+CHILD_COLUMNS = {
+	# kept although the list no longer asks for "assignments": the Person and
+	# Task filters read the same child table, and the column is one word away
+	"shift-details": {
+		# who did what, as pairs: two separate lists would not say which is whose
+		"assignments": ("Labour Attendance Line", "assignment_task",
+			("name_of_person_lal", "task_name_lal")),
+	},
+}
+
+
+def _valid_fields(meta, requested, extra=()):
+	return [
+		field for field in requested
+		if field in STANDARD_FIELDS
+		or field in VIRTUAL_COLUMNS
+		or field in extra
+		or meta.has_field(field)
+	]
+
+
+def _mark_cheapest_quotations(rows):
+	"""Flag the quotation that is actually cheapest for each Material Request.
+
+	The smallest Grand Total on screen means nothing on its own - a quotation is small when
+	it was asked for less. What can be compared is two suppliers answering the same request,
+	and even then only on the items they both quoted: MAT-MR-2026-00014 here is answered
+	with seven items by one supplier and four by another, so their totals are not the same
+	question. So each group is scored on its shared items alone, at rate x quantity, which
+	is the comparison ERPNext's own report makes per line.
+
+	A request answered by a single quotation is left unmarked - there is nothing to be
+	cheaper than.
+	"""
+	names = [row.get("name") for row in rows if row.get("name")]
+	if not names:
+		return
+
+	# every request these quotations answer
+	requests = frappe.get_all(
+		"Supplier Quotation Item",
+		filters={"parent": ["in", names], "material_request": ["!=", ""]},
+		fields=["distinct material_request as name"],
+		limit_page_length=0,
+	)
+	request_names = [row.name for row in requests if row.name]
+	if not request_names:
+		return
+
+	# every quotation answering those requests, page or no page
+	lines = frappe.get_all(
+		"Supplier Quotation Item",
+		filters={"material_request": ["in", request_names], "docstatus": ["<", 2]},
+		fields=["parent", "material_request", "item_code", "qty", "rate"],
+		limit_page_length=0,
+	)
+
+	groups = {}
+	for line in lines:
+		group = groups.setdefault(line.material_request, {})
+		quote = group.setdefault(line.parent, {})
+		quote[line.item_code] = quote.get(line.item_code, 0.0) + flt(line.rate) * flt(line.qty)
+
+	cheapest = {}
+	for request, quotes in groups.items():
+		if len(quotes) < 2:
+			continue
+		shared = set.intersection(*(set(items) for items in quotes.values()))
+		if not shared:
+			continue
+		scored = {name: sum(items[item] for item in shared) for name, items in quotes.items()}
+		winner = min(scored, key=scored.get)
+		# a tie is nobody's win: two identical offers should not have one of them crowned
+		if list(scored.values()).count(scored[winner]) > 1:
+			continue
+		cheapest.setdefault(winner, []).append(request)
+
+	for row in rows:
+		requests_won = cheapest.get(row.get("name"))
+		if requests_won:
+			row["is_cheapest"] = 1
+			row["cheapest_for"] = ", ".join(sorted(requests_won))
+
+
+def _fill_child_columns(doctype, child_columns, columns, rows):
+	"""Join each child table's values into the one cell the list shows.
+
+	A column may name one child field or a pair of them. A pair is read out of the
+	same row and printed as "person — task", so the two halves stay matched;
+	separate columns would only say who was there and what was done, not which
+	of them did which.
+
+	One query per column for the whole page rather than one per row, and the order the
+	rows were entered in is kept - idx, not alphabetical - so the people read the way
+	they do on the form.
+	"""
+	wanted = [name for name in child_columns if name in columns]
+	if not wanted or not rows:
+		return
+	parents = [row.get("name") for row in rows if row.get("name")]
+	if not parents:
+		return
+	for column in wanted:
+		child_doctype, parentfield, child_field = child_columns[column]
+		fields = (child_field,) if isinstance(child_field, str) else tuple(child_field)
+		joined = {}
+		for entry in frappe.get_all(
+			child_doctype,
+			filters={"parenttype": doctype, "parentfield": parentfield,
+				"parent": ["in", parents]},
+			fields=["parent", "idx"] + list(fields),
+			order_by="parent, idx",
+		):
+			parts = [entry.get(name) for name in fields]
+			if not any(parts):
+				continue
+			# a row that carries only one half still says the half it has
+			value = " — ".join(part for part in parts if part)
+			seen = joined.setdefault(entry["parent"], [])
+			# the same pairing entered twice in one shift is said once
+			if value not in seen:
+				seen.append(value)
+		for row in rows:
+			# semicolons, because a pair already has a dash inside it
+			row[column] = "; ".join(joined.get(row.get("name"), []))
+
+
+def _receipt_status(per_received):
+	"""What a Purchase Order receipts add up to, in the words a list can show."""
+	received = flt(per_received)
+	if received <= 0:
+		return "Not Received"
+	if received >= 99.99:
+		return "Received"
+	return "Partly Received"
 
 
 def _default_order(config):
@@ -281,17 +736,49 @@ def _sanitize_document(doctype, payload):
 	return clean
 
 
+def _brand_logo():
+	"""The logo the workspace wears, taken from whichever letter head is the default."""
+	image = frappe.db.get_value("Letter Head", {"is_default": 1, "disabled": 0}, "image")
+	if not image or not str(image).startswith("/files/"):
+		# /private/files needs a signed request; an <img> cannot make one, so the
+		# workspace keeps its wordmark rather than showing a broken picture
+		return ""
+	return image
+
+
+def _kind_rights(doctype):
+	"""What this user may do with a doctype, in the desk's own words.
+
+	Read is not among them: a kind the user cannot read is left out of the boot
+	altogether, so the menu does not offer a page that would only refuse them.
+	"""
+	return {
+		"can_create": bool(frappe.has_permission(doctype, "create")),
+		"can_write": bool(frappe.has_permission(doctype, "write")),
+		"can_delete": bool(frappe.has_permission(doctype, "delete")),
+		"can_submit": bool(frappe.has_permission(doctype, "submit")),
+		"can_cancel": bool(frappe.has_permission(doctype, "cancel")),
+		"can_amend": bool(frappe.has_permission(doctype, "amend")),
+	}
+
+
 @frappe.whitelist()
 def bootstrap():
 	user = frappe.get_doc("User", frappe.session.user)
 	return {
+		"brand_logo": _brand_logo(),
 		"user": {
 			"name": user.name,
 			"full_name": user.full_name or user.name,
 			"user_image": user.user_image,
 		},
 		"fiscal_year": frappe.defaults.get_global_default("fiscal_year") or "",
-		"doctypes": DOCTYPES,
+		# only the kinds this user can read, each carrying what they may do with it
+		"doctypes": {
+			kind: dict(config, **_kind_rights(config["doctype"]))
+			for kind, config in DOCTYPES.items()
+			if frappe.has_permission(config["doctype"], "read")
+		},
 	}
 
 
@@ -740,6 +1227,193 @@ def _report_pdf(title, period, columns, rows, footer="", filters=None):
 	frappe.response["type"] = "binary"
 
 
+# ---------------------------------------------------------------- document print
+
+# The workspace's own print, so a PDF reads like the form the user was just looking at.
+#
+# Two things were wrong with going through the Desk's print engine. A Purchase Order's
+# default format on this site is a custom one that carries no letter head, so its PDF came
+# out with no logo at all while every other document had one. And the standard format
+# prints whatever is not print_hide, which on a Purchase Invoice or a Payment Entry means
+# rows like "Update Outstanding for Self" and "Paid Amount After Tax (Company Currency)" -
+# nothing like the clean Material Request page this was asked to match.
+#
+# So the layout comes from the client: it sends the fields its read-only form actually has
+# on screen, in the order it drew them. That keeps one source of truth - whatever the form
+# shows is what prints - and it means a field hidden by depends_on never reaches the page.
+# Nothing about the site's own print formats is touched; they still serve the Desk.
+
+
+def _letterhead_parts(doc):
+	"""The header and footer HTML of whichever letter head applies, logo and all.
+
+	Read from the Letter Head record rather than built here, so the logo stays a piece of
+	configuration - changing it in the Desk changes every page this produces.
+	"""
+	name = doc.get("letter_head") or frappe.db.get_value(
+		"Letter Head", {"is_default": 1, "disabled": 0}, "name"
+	)
+	if not name:
+		return "", ""
+	head = frappe.db.get_value("Letter Head", name, ["content", "footer"], as_dict=True)
+	if not head:
+		return "", ""
+	return head.get("content") or "", head.get("footer") or ""
+
+
+def _print_value(doc, df):
+	"""What the field reads as on paper, through Frappe's own formatter."""
+	value = doc.get(df.fieldname)
+	if value in (None, "", []):
+		return ""
+	if df.fieldtype == "Check":
+		return _("Yes") if cint(value) else _("No")
+	try:
+		text = frappe.format_value(value, df=df, doc=doc)
+	except Exception:
+		text = str(value)
+	# a formatter can hand back markup (a Link becomes an anchor to the Desk); on paper the
+	# plain text is what is wanted, and it keeps a stray href out of the PDF
+	text = re.sub(r"<[^>]+>", "", str(text)).strip()
+	return text
+
+
+def _print_table(doc, df, columns):
+	rows = doc.get(df.fieldname) or []
+	if not rows:
+		return ""
+	child = frappe.get_meta(df.options)
+	if not columns:
+		columns = [f.fieldname for f in child.fields if f.in_list_view]
+	fields = [child.get_field(fieldname) for fieldname in columns]
+	fields = [field for field in fields if field and field.fieldtype not in ("Section Break",
+		"Column Break", "Tab Break", "HTML", "Button", "Table", "Table MultiSelect")]
+	if not fields:
+		return ""
+	head = "".join(
+		'<th class="%s">%s</th>' % (
+			"num" if field.fieldtype in _NUMERIC else "",
+			frappe.utils.escape_html(_(field.label or field.fieldname)))
+		for field in fields
+	)
+	body = ""
+	for index, row in enumerate(rows, start=1):
+		cells = "".join(
+			'<td class="%s">%s</td>' % (
+				"num" if field.fieldtype in _NUMERIC else "",
+				frappe.utils.escape_html(_print_value(row, field)))
+			for field in fields
+		)
+		body += "<tr><td class=\"num\">%d</td>%s</tr>" % (index, cells)
+	return ('<table class="ag-items"><thead><tr><th class="num">%s</th>%s</tr></thead>'
+		'<tbody>%s</tbody></table>') % (_("Sr"), head, body)
+
+
+_NUMERIC = ("Currency", "Float", "Int", "Percent")
+
+_PRINT_CSS = """
+	body { font-family: "Helvetica", "Arial", sans-serif; font-size: 9.5pt; color: #1c1d22; margin: 0; }
+	.ag-lh { margin-bottom: 22px; }
+	.ag-lh img { max-height: 56px; width: auto; }
+	h1 { font-size: 15pt; margin: 0 0 2px; letter-spacing: -.2px; }
+	.ag-name { color: #6b6f76; font-size: 9pt; margin: 0 0 14px; }
+	hr { border: 0; border-top: 1px solid #e4e6ea; margin: 0 0 16px; }
+	table.ag-meta { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+	table.ag-meta td { vertical-align: top; padding: 3px 10px 3px 0; width: 25%; }
+	table.ag-meta td.k { color: #6b6f76; width: 22%; }
+	table.ag-meta td.v { font-weight: 500; width: 28%; }
+	table.ag-items { width: 100%; border-collapse: collapse; }
+	table.ag-items th { text-align: left; font-size: 8.5pt; font-weight: 600; color: #6b6f76;
+		border: 1px solid #e4e6ea; padding: 7px 8px; background: #fafafb; }
+	table.ag-items td { border: 1px solid #e4e6ea; padding: 7px 8px; }
+	table.ag-items .num { text-align: right; }
+	.ag-foot { margin-top: 26px; padding-top: 10px; border-top: 1px solid #e4e6ea;
+		color: #6b6f76; font-size: 8.5pt; }
+"""
+
+
+def _print_html(kind, name, layout):
+	config = _config(kind)
+	doctype = config["doctype"]
+	if not frappe.has_permission(doctype, "print", doc=name):
+		if not frappe.has_permission(doctype, "read", doc=name):
+			raise frappe.PermissionError
+
+	doc = frappe.get_doc(doctype, name)
+	meta = frappe.get_meta(doctype)
+	layout = _json(layout, {}) or {}
+	wanted = layout.get("fields") or []
+	tables = layout.get("tables") or {}
+
+	pairs = []
+	for fieldname in wanted:
+		df = meta.get_field(fieldname)
+		if not df or df.fieldtype in ("Table", "Table MultiSelect"):
+			continue
+		text = _print_value(doc, df)
+		if not text:
+			# an empty row on paper is noise, exactly as the standard format decides
+			continue
+		pairs.append((_(df.label or fieldname), text))
+
+	# two label/value pairs per row, which is how the form itself is laid out
+	meta_rows = ""
+	for index in range(0, len(pairs), 2):
+		cells = ""
+		for label, text in pairs[index:index + 2]:
+			cells += '<td class="k">%s</td><td class="v">%s</td>' % (
+				frappe.utils.escape_html(label), frappe.utils.escape_html(text))
+		if len(pairs) - index == 1:
+			cells += '<td></td><td></td>'
+		meta_rows += "<tr>%s</tr>" % cells
+
+	tables_html = ""
+	for fieldname, columns in tables.items():
+		df = meta.get_field(fieldname)
+		if not df or df.fieldtype != "Table":
+			continue
+		rendered = _print_table(doc, df, columns or [])
+		if not rendered:
+			continue
+		if len(tables) > 1:
+			tables_html += '<h3 style="font-size:10pt;margin:18px 0 6px">%s</h3>' % (
+				frappe.utils.escape_html(_(df.label or fieldname)),)
+		tables_html += rendered
+
+	header, footer = _letterhead_parts(doc)
+	return """<style>%s</style>
+		<div class="ag-lh">%s</div>
+		<h1>%s</h1>
+		<p class="ag-name">%s</p>
+		<hr>
+		<table class="ag-meta">%s</table>
+		%s
+		<div class="ag-foot">%s</div>""" % (
+		_PRINT_CSS, header, frappe.utils.escape_html(_(config["title"])),
+		frappe.utils.escape_html(doc.name), meta_rows, tables_html, footer)
+
+
+@frappe.whitelist()
+def document_print(kind, name, layout=None):
+	"""The printable page for one document, for the browser's own print dialog."""
+	return {"html": _print_html(kind, name, layout)}
+
+
+@frappe.whitelist()
+def document_pdf(kind, name, layout=None):
+	"""The same page as a PDF, handed back base64 so the browser can save it."""
+	import base64
+
+	from frappe.utils.pdf import get_pdf
+
+	html = _print_html(kind, name, layout)
+	content = get_pdf(html, {"orientation": "Portrait"})
+	return {
+		"filename": "%s.pdf" % name,
+		"content": base64.b64encode(content).decode("ascii"),
+	}
+
+
 # ---------------------------------------------------------------- production report
 PRODUCTION_COLUMNS = [
 	{"key": "date", "label": "Date", "align": "left"},
@@ -873,6 +1547,326 @@ def production_report_pdf(from_date, to_date, location=None, items=None):
 			summary["total_quantity"], summary["total_records"], summary["total_items"]
 		),
 		filters=_production_filter_pairs(location, items),
+	)
+
+
+# --------------------------------------------------------------- ledger reports
+# ERPNext's own General Ledger and Stock Ledger, run exactly as the desk runs them and
+# handed back for this workspace to draw. The reports do all the work; nothing about the
+# figures is recomputed here.
+#
+# Only these two names may be asked for. run() checks the caller's permission on the
+# report itself, but pinning the names keeps this from becoming a way to run any report
+# on the site through one endpoint.
+DESK_REPORTS = {
+	"general-ledger": "General Ledger",
+	"stock-ledger": "Stock Ledger",
+}
+
+
+@frappe.whitelist()
+def desk_report(key, filters=None):
+	from frappe.desk.query_report import run
+
+	name = DESK_REPORTS.get(key)
+	if not name:
+		frappe.throw(_("Unknown report."), frappe.ValidationError)
+
+	chosen = {field: value for field, value in _json(filters, {}).items() if value not in (None, "")}
+	if not chosen.get("company"):
+		chosen["company"] = frappe.defaults.get_user_default("Company")
+
+	# ignore_prepared_report: these two are quick, and a background job would hand back a
+	# "report is being generated" placeholder rather than rows
+	data = run(report_name=name, filters=frappe.as_json(chosen), ignore_prepared_report=True)
+
+	# the report also returns a chart, a message and a summary; the screen needs neither
+	# those nor the columns it hides from itself
+	return {
+		"title": _(name),
+		"columns": [column for column in (data.get("columns") or []) if not column.get("hidden")],
+		"rows": data.get("result") or [],
+	}
+
+
+def _desk_report_export(key, filters):
+	"""The same rows the screen drew, shaped the way this workspace's exporters want them.
+
+	A query report names its columns `fieldname` and aligns them by fieldtype; the two
+	exporters here expect `key` and an explicit alignment. That is the whole translation -
+	the figures are the report's own.
+	"""
+	data = desk_report(key, filters)
+	chosen = _json(filters, {})
+	columns = [
+		{
+			"key": column.get("fieldname"),
+			"label": column.get("label") or column.get("fieldname"),
+			"align": "right" if column.get("fieldtype") in ("Currency", "Float", "Int", "Percent") else "left",
+		}
+		for column in data["columns"]
+	]
+	period = _("Period: {0} to {1}").format(
+		_user_date(chosen.get("from_date")), _user_date(chosen.get("to_date"))
+	)
+	pairs = [(frappe.unscrub(field), value) for field, value in chosen.items()
+		if field not in ("from_date", "to_date") and value]
+	return data, columns, period, pairs
+
+
+@frappe.whitelist()
+def desk_report_xlsx(key, filters=None):
+	data, columns, period, pairs = _desk_report_export(key, filters)
+	_report_xlsx(data["title"], period, columns, data["rows"], filters=pairs)
+
+
+@frappe.whitelist()
+def desk_report_pdf(key, filters=None):
+	data, columns, period, pairs = _desk_report_export(key, filters)
+	_report_pdf(
+		data["title"], period, columns, data["rows"],
+		footer=_("Records: {0}").format(len(data["rows"])),
+		filters=pairs,
+	)
+
+
+# ----------------------------------------------------------------- fuel reports
+# The two sides of the same tank: what was bought into a warehouse, and what went out of
+# it to the vehicles. Both read agriventure_nagpur_erp's own documents and invent nothing
+# those documents do not already hold - except the two figures a fuel report exists for,
+# distance run and kilometres per litre, which are arithmetic on the readings themselves.
+FUEL_STOCK_COLUMNS = [
+	{"key": "date", "label": "Date", "align": "left"},
+	{"key": "entry", "label": "Entry", "align": "left"},
+	{"key": "item", "label": "Fuel Type", "align": "left"},
+	{"key": "vendor", "label": "Supplier", "align": "left"},
+	{"key": "warehouse", "label": "Warehouse", "align": "left"},
+	{"key": "quantity", "label": "Quantity (Ltr)", "align": "right"},
+	{"key": "rate", "label": "Rate/Ltr (Rs.)", "align": "right"},
+	{"key": "amount", "label": "Amount (Rs.)", "align": "right"},
+	{"key": "stock_entry", "label": "Stock Entry", "align": "left"},
+]
+
+# One row per vehicle rather than per document: a single issue can fuel several, and which
+# vehicle took how much is the whole point of reading this.
+FUEL_ISSUE_COLUMNS = [
+	{"key": "date", "label": "Date", "align": "left"},
+	{"key": "entry", "label": "Entry", "align": "left"},
+	{"key": "item", "label": "Fuel Type", "align": "left"},
+	{"key": "warehouse", "label": "Warehouse", "align": "left"},
+	{"key": "vehicle", "label": "Vehicle", "align": "left"},
+	{"key": "last_reading", "label": "Last Reading (KM)", "align": "right"},
+	{"key": "current_reading", "label": "Current Reading (KM)", "align": "right"},
+	{"key": "run", "label": "Run (KM)", "align": "right"},
+	{"key": "quantity", "label": "Issued (Ltr)", "align": "right"},
+	{"key": "mileage", "label": "KM / Ltr", "align": "right"},
+	{"key": "purpose", "label": "Purpose", "align": "left"},
+]
+
+
+def _fuel_where(prefix, date_field, from_date, to_date, item, warehouse):
+	conditions = [f"{prefix}.{date_field} BETWEEN %(from_date)s AND %(to_date)s"]
+	values = {"from_date": from_date, "to_date": to_date}
+	if item:
+		conditions.append(f"{prefix}.item = %(item)s")
+		values["item"] = item
+	if warehouse:
+		conditions.append(f"{prefix}.warehouse = %(warehouse)s")
+		values["warehouse"] = warehouse
+	return conditions, values
+
+
+def _fuel_stock_payload(from_date, to_date, item=None, warehouse=None, vendor=None):
+	conditions, values = _fuel_where("fs", "date_ffs", from_date, to_date, item, warehouse)
+	if vendor:
+		conditions.append("fs.vendor_name = %(vendor)s")
+		values["vendor"] = vendor
+	where = "WHERE " + " AND ".join(conditions)
+
+	rows = frappe.db.sql(
+		f"""SELECT
+				fs.date_ffs AS date,
+				fs.name AS entry,
+				fs.item AS item,
+				fs.vendor_name AS vendor,
+				fs.warehouse AS warehouse,
+				IFNULL(fs.quantity_ffs, 0) AS quantity,
+				IFNULL(fs.rateltr_ffs, 0) AS rate,
+				IFNULL(fs.amountffs, 0) AS amount,
+				fs.stock_entry_reference AS stock_entry
+			FROM `tabFuel for Stock` fs
+			{where}
+			ORDER BY fs.date_ffs ASC, fs.name ASC""",
+		values,
+		as_dict=True,
+	)
+
+	graph = frappe.db.sql(
+		f"""SELECT fs.date_ffs AS date, fs.item AS item,
+				SUM(IFNULL(fs.quantity_ffs, 0)) AS value
+			FROM `tabFuel for Stock` fs
+			{where}
+			GROUP BY fs.date_ffs, fs.item
+			ORDER BY fs.date_ffs ASC""",
+		values,
+		as_dict=True,
+	)
+	for row in graph:
+		row["date"] = str(row["date"] or "")
+	for row in rows:
+		row["date"] = _user_date(row["date"])
+
+	return {
+		"rows": rows,
+		"graph": graph,
+		"columns": [{**column, "label": _(column["label"])} for column in FUEL_STOCK_COLUMNS],
+		"summary": {
+			"total_quantity": flt(sum(flt(row["quantity"]) for row in rows), 2),
+			"total_amount": flt(sum(flt(row["amount"]) for row in rows), 2),
+			"total_records": len(rows),
+		},
+	}
+
+
+def _fuel_issue_payload(from_date, to_date, item=None, warehouse=None, vehicle=None):
+	conditions, values = _fuel_where("fd", "date", from_date, to_date, item, warehouse)
+	if vehicle:
+		conditions.append("mv.vehicle_details = %(vehicle)s")
+		values["vehicle"] = vehicle
+	where = "WHERE " + " AND ".join(conditions)
+
+	rows = frappe.db.sql(
+		f"""SELECT
+				fd.date AS date,
+				fd.name AS entry,
+				fd.item AS item,
+				fd.warehouse AS warehouse,
+				mv.vehicle_details AS vehicle,
+				mv.last_readingkm AS last_reading,
+				mv.current_readingkm AS current_reading,
+				IFNULL(mv.issued_quantity_ct, 0) AS quantity,
+				fd.purpose AS purpose
+			FROM `tabFuel for Distribution` fd
+			INNER JOIN `tabMultiple Vehicle Details` mv
+				ON mv.parent = fd.name AND mv.parenttype = 'Fuel for Distribution'
+			{where}
+			ORDER BY fd.date ASC, fd.name ASC, mv.idx ASC""",
+		values,
+		as_dict=True,
+	)
+
+	for row in rows:
+		# Both readings are Data fields on the child table, so they arrive as text and a
+		# blank one reads as nothing. A run is only claimed when both are there and the
+		# odometer has actually moved forward - anything else is left at zero rather than
+		# reported as a distance nobody drove.
+		last = flt(row["last_reading"])
+		current = flt(row["current_reading"])
+		run = current - last if last and current and current >= last else 0
+		litres = flt(row["quantity"])
+		row["run"] = flt(run, 2)
+		row["mileage"] = flt(run / litres, 2) if run and litres else 0
+		row["date"] = _user_date(row["date"])
+
+	graph = frappe.db.sql(
+		f"""SELECT fd.date AS date, fd.item AS item,
+				SUM(IFNULL(mv.issued_quantity_ct, 0)) AS value
+			FROM `tabFuel for Distribution` fd
+			INNER JOIN `tabMultiple Vehicle Details` mv
+				ON mv.parent = fd.name AND mv.parenttype = 'Fuel for Distribution'
+			{where}
+			GROUP BY fd.date, fd.item
+			ORDER BY fd.date ASC""",
+		values,
+		as_dict=True,
+	)
+	for row in graph:
+		row["date"] = str(row["date"] or "")
+
+	return {
+		"rows": rows,
+		"graph": graph,
+		"columns": [{**column, "label": _(column["label"])} for column in FUEL_ISSUE_COLUMNS],
+		"summary": {
+			"total_quantity": flt(sum(flt(row["quantity"]) for row in rows), 2),
+			"total_run": flt(sum(flt(row["run"]) for row in rows), 2),
+			"total_records": len(rows),
+			"total_vehicles": len({row["vehicle"] for row in rows if row["vehicle"]}),
+		},
+	}
+
+
+@frappe.whitelist()
+def fuel_stock_report(from_date, to_date, item=None, warehouse=None, vendor=None):
+	return _fuel_stock_payload(from_date, to_date, item, warehouse, vendor)
+
+
+@frappe.whitelist()
+def fuel_issue_report(from_date, to_date, item=None, warehouse=None, vehicle=None):
+	return _fuel_issue_payload(from_date, to_date, item, warehouse, vehicle)
+
+
+def _fuel_period(from_date, to_date):
+	return _("Period: {0} to {1}").format(_user_date(from_date), _user_date(to_date))
+
+
+@frappe.whitelist()
+def fuel_stock_report_xlsx(from_date, to_date, item=None, warehouse=None, vendor=None):
+	data = _fuel_stock_payload(from_date, to_date, item, warehouse, vendor)
+	summary = data["summary"]
+	_report_xlsx(
+		_("Fuel Stock Report"),
+		_fuel_period(from_date, to_date),
+		data["columns"],
+		data["rows"],
+		totals=["", "", "", "", _("Total"), summary["total_quantity"], "", summary["total_amount"], ""],
+		filters=[(_("Fuel Type"), item), (_("Warehouse"), warehouse), (_("Supplier"), vendor)],
+	)
+
+
+@frappe.whitelist()
+def fuel_stock_report_pdf(from_date, to_date, item=None, warehouse=None, vendor=None):
+	data = _fuel_stock_payload(from_date, to_date, item, warehouse, vendor)
+	summary = data["summary"]
+	_report_pdf(
+		_("Fuel Stock Report"),
+		_fuel_period(from_date, to_date),
+		data["columns"],
+		data["rows"],
+		footer=_("Total Quantity: {0} Ltr &nbsp;&nbsp; Total Amount: {1} &nbsp;&nbsp; Records: {2}").format(
+			summary["total_quantity"], summary["total_amount"], summary["total_records"]
+		),
+		filters=[(_("Fuel Type"), item), (_("Warehouse"), warehouse), (_("Supplier"), vendor)],
+	)
+
+
+@frappe.whitelist()
+def fuel_issue_report_xlsx(from_date, to_date, item=None, warehouse=None, vehicle=None):
+	data = _fuel_issue_payload(from_date, to_date, item, warehouse, vehicle)
+	summary = data["summary"]
+	_report_xlsx(
+		_("Fuel Distribution Report"),
+		_fuel_period(from_date, to_date),
+		data["columns"],
+		data["rows"],
+		totals=["", "", "", "", _("Total"), "", "", summary["total_run"], summary["total_quantity"], "", ""],
+		filters=[(_("Fuel Type"), item), (_("Warehouse"), warehouse), (_("Vehicle"), vehicle)],
+	)
+
+
+@frappe.whitelist()
+def fuel_issue_report_pdf(from_date, to_date, item=None, warehouse=None, vehicle=None):
+	data = _fuel_issue_payload(from_date, to_date, item, warehouse, vehicle)
+	summary = data["summary"]
+	_report_pdf(
+		_("Fuel Distribution Report"),
+		_fuel_period(from_date, to_date),
+		data["columns"],
+		data["rows"],
+		footer=_("Total Issued: {0} Ltr &nbsp;&nbsp; Total Run: {1} KM &nbsp;&nbsp; Vehicles: {2} &nbsp;&nbsp; Records: {3}").format(
+			summary["total_quantity"], summary["total_run"], summary["total_vehicles"], summary["total_records"]
+		),
+		filters=[(_("Fuel Type"), item), (_("Warehouse"), warehouse), (_("Vehicle"), vehicle)],
 	)
 
 
@@ -1150,6 +2144,38 @@ def pos_closing_from_opening(pos_opening_entry, period_end_date=None):
 
 
 @frappe.whitelist()
+def quotations_for_requests(material_requests):
+	"""Every Supplier Quotation raised against these Material Requests.
+
+	A Purchase Order names only the quotation each line was actually taken from. The others
+	raised for the same request - the ones not chosen - are just as much part of the trail,
+	which is what the desk comparison shows, so they are gathered by walking Supplier
+	Quotation Item back to its Material Request.
+	"""
+	names = _json(material_requests, [])
+	if not names:
+		return []
+
+	rows = frappe.get_all(
+		"Supplier Quotation Item",
+		filters={"material_request": ["in", names], "docstatus": ["<", 2]},
+		fields=["distinct parent as name"],
+		limit_page_length=100,
+	)
+	found = [row.name for row in rows]
+	if not found:
+		return []
+	# read back through get_all so the usual permission checks apply to the parents too
+	return frappe.get_all(
+		"Supplier Quotation",
+		filters={"name": ["in", found]},
+		pluck="name",
+		order_by="transaction_date desc",
+		limit_page_length=100,
+	)
+
+
+@frappe.whitelist()
 def list_status_options(kind):
 	"""What the list's Status column can actually read, and the field it comes from.
 
@@ -1280,7 +2306,8 @@ def list_documents(kind, search=None, status=None, from_date=None, to_date=None,
 	or_filters = []
 	if search:
 		or_filters = [[field, "like", f"%{search}%"] for field in _valid_fields(meta, config["search_fields"])]
-	columns = _valid_fields(meta, config["columns"])
+	child_columns = CHILD_COLUMNS.get(kind, {})
+	columns = _valid_fields(meta, config["columns"], extra=child_columns)
 	# where a workflow is in charge it owns the real state, so the Status column shows
 	# that instead of the built-in status and the list agrees with the badge on the form
 	workflow_field = frappe.db.get_value(
@@ -1315,9 +2342,15 @@ def list_documents(kind, search=None, status=None, from_date=None, to_date=None,
 	query = {
 		# docstatus bhi laate hain — cancelled row ka status workflow state se
 		# overwrite nahi hona chahiye (workflow state cancel par badalta nahi).
-		"fields": columns
+		"fields": [field for field in columns
+			if field not in VIRTUAL_COLUMNS and field not in child_columns]
+		+ [source for name, source in VIRTUAL_COLUMNS.items()
+			if name in columns and source not in columns and meta.has_field(source)]
 		+ ([workflow_field] if use_workflow_state and workflow_field not in columns else [])
-		+ (["docstatus"] if "docstatus" not in columns else []),
+		+ (["docstatus"] if "docstatus" not in columns else [])
+		# the row is opened and deleted by docname, so it is fetched even
+		# where no column shows it
+		+ ([] if "name" in columns else ["name"]),
 		"filters": query_filters,
 		# Newest first by the document's own date, with last-touched breaking a tie. A kind
 		# may name its own order; masters, dated only by creation, sort on that.
@@ -1336,7 +2369,10 @@ def list_documents(kind, search=None, status=None, from_date=None, to_date=None,
 	if any(entry[0] != config["doctype"] for entry in query_filters):
 		query["distinct"] = True
 	rows = frappe.get_list(config["doctype"], **query)
+	_fill_child_columns(config["doctype"], child_columns, columns, rows)
 	for row in rows:
+		if "pr_status" in columns:
+			row["pr_status"] = _receipt_status(row.get("per_received"))
 		if cint(row.get("docstatus")) == 2:
 			# Cancel har workflow state par bhaari — warna list me "Approved" dikhta tha.
 			row["status"] = "Cancelled"
@@ -1344,6 +2380,8 @@ def list_documents(kind, search=None, status=None, from_date=None, to_date=None,
 				row[workflow_field] = "Cancelled"
 		elif use_workflow_state and row.get(workflow_field):
 			row["status"] = row[workflow_field]
+	if kind == "supplier-quotation":
+		_mark_cheapest_quotations(rows)
 	_apply_link_titles(meta, columns, rows)
 	# qualified: Frappe leaves fields wrapped in a function alone, so with a child table
 	# joined in a bare `name` would be ambiguous
@@ -1632,6 +2670,32 @@ def save_document(kind, document):
 	return doc.as_dict()
 
 
+def _state_pos_amounts(doc):
+	"""State the two figures ERPNext leaves to the till.
+
+	calculate_paid_amount and calculate_outstanding_amount each begin by testing for a
+	Sales Invoice or a Purchase Invoice (taxes_and_totals.py:877, :894), so for a POS
+	Invoice neither ever runs: what is stored is whatever was sent. An unstated
+	outstanding of zero then makes set_status call an unpaid sale Paid.
+
+	ERPNext's own till states both before submitting (pos_payment.js:372-375) and so
+	does ours. A POS Invoice submitted from the form - an amended copy, or a return -
+	comes through here instead, so it is stated here. validate() runs afterwards and
+	leaves both alone: POS Invoice skips SalesInvoice.validate, where set_paid_amount
+	is called, and reaches set_status with these values in place.
+	"""
+	if doc.doctype != "POS Invoice":
+		return
+	paid = sum(flt(row.amount) for row in (doc.get("payments") or []))
+	total = flt(doc.get("rounded_total")) or flt(doc.get("grand_total"))
+	doc.paid_amount = paid
+	doc.base_paid_amount = paid * (flt(doc.get("conversion_rate")) or 1)
+	outstanding = total - paid
+	# Paying over the total is change owed, not a negative debt. A return is negative
+	# throughout, so the clamp follows the sign of the invoice rather than assuming one.
+	doc.outstanding_amount = max(outstanding, 0) if total >= 0 else min(outstanding, 0)
+
+
 def _apply_allowed_after_submit(doc, payload):
 	"""Copy across only what may change after submission, parent fields and child rows.
 
@@ -1669,6 +2733,9 @@ def submit_document(kind, name):
 	doc.check_permission("submit")
 	if doc.docstatus != 0:
 		frappe.throw(_("Only draft documents can be submitted."), frappe.ValidationError)
+	# grand_total is settled by the save that came before this, so the figures
+	# derived from it here cannot go stale
+	_state_pos_amounts(doc)
 	doc.submit()
 	return doc.as_dict()
 
@@ -1699,6 +2766,25 @@ def document_activity(kind, name, limit=40):
 		if fieldname == "docstatus":
 			return {0: _("Draft"), 1: _("Submitted"), 2: _("Cancelled")}.get(cint(value), value)
 		return value if value not in (None, "") else "\u2014"
+
+	# ERPNext answers one edited quantity with eight lines - Total, Net Total, both again in
+	# company currency, the tax withholding mirrors, the base_* copies. Every one of those is
+	# read-only, written by the recalculation rather than by the person. So the rule is: a
+	# read-only field is noise, unless it is one of the few headline numbers a reader looks
+	# for. Nothing is hidden silently; what was dropped is counted at the end of the entry.
+	HEADLINE = {"grand_total", "total_qty", "status", "docstatus", "workflow_state",
+		"per_received", "per_billed", "outstanding_amount", "advance_paid", "supplier",
+		"transaction_date", "posting_date", "schedule_date", "due_date", "company"}
+
+	def worth_showing(field_meta, fieldname):
+		if fieldname in HEADLINE:
+			return True
+		# base_* is always the same number again in company currency, and on a child row it
+		# is not even marked read-only - so it slips past the check below on its own
+		if fieldname.startswith("base_"):
+			return False
+		field = field_meta.get_field(fieldname) if field_meta else None
+		return not (field and field.read_only)
 
 	def child_label(table_field):
 		field = meta.get_field(table_field)
@@ -1733,10 +2819,14 @@ def document_activity(kind, name, limit=40):
 		except ValueError:
 			continue
 		changes = []
+		hidden = 0
 		for change in payload.get("changed") or []:
 			if len(change) != 3:
 				continue
 			fieldname, before, after = change
+			if not worth_showing(meta, fieldname):
+				hidden += 1
+				continue
 			changes.append("{0}: {1} → {2}".format(label_for(fieldname), shown(fieldname, before), shown(fieldname, after)))
 
 		# a row edited, added or removed is a real change too; these were being dropped,
@@ -1745,10 +2835,15 @@ def document_activity(kind, name, limit=40):
 			if len(change) != 4:
 				continue
 			table_field, _idx, _rowname, fields = change
+			table = meta.get_field(table_field)
+			child_meta = frappe.get_meta(table.options) if table and table.options else None
 			for row_change in fields or []:
 				if len(row_change) != 3:
 					continue
 				fieldname, before, after = row_change
+				if not worth_showing(child_meta, fieldname):
+					hidden += 1
+					continue
 				changes.append("{0} → {1}: {2} → {3}".format(
 					child_label(table_field), frappe.unscrub(fieldname),
 					shown(fieldname, before), shown(fieldname, after)))
@@ -1758,6 +2853,12 @@ def document_activity(kind, name, limit=40):
 					continue
 				changes.append("{0}: {1}".format(child_label(change[0]), word))
 
+		# an edit that only moved recalculated numbers still happened, so it is reported as
+		# such rather than vanishing from the trail
+		if not changes and hidden:
+			changes.append(_("{0} recalculated fields").format(hidden))
+		elif hidden:
+			changes.append(_("and {0} more").format(hidden))
 		if not changes:
 			continue
 		events.append({

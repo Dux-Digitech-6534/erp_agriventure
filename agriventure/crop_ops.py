@@ -15,14 +15,22 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowtime
 
+from agriventure.api import DOCTYPES
+
+# The category/activity master is not called the same DocType on every bench this app is
+# deployed to ("Category Details" on some, "Category Master" here) - read from the one place
+# (agriventure.api.DOCTYPES) that already gets this right, instead of a second hardcoded name
+# that can drift out of sync with it, as it had.
+_CATEGORY_TABLE = "`tab" + DOCTYPES["category-details"]["doctype"] + "`"
+
 # Shift Details -> its labour rows -> the activity master, keeping only the wanted activity.
-_JOIN = """
+_JOIN = f"""
 	FROM `tabShift Details` sd
 	INNER JOIN `tabLabour Attendance Line` lal
 		ON lal.parent = sd.name
 		AND lal.parenttype = 'Shift Details'
 		AND lal.parentfield = 'assignment_task'
-	INNER JOIN `tabCategory Details` cd
+	INNER JOIN {_CATEGORY_TABLE} cd
 		ON cd.name = lal.task_name_lal
 	LEFT JOIN `tabField Details` fd
 		ON fd.name = lal.name_of_field_lal

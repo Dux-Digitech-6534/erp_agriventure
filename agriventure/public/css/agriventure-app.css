@@ -1,0 +1,520 @@
+/* ============================================================
+   Agriventure — APP-ONLY enhancement layer
+   Loaded ONLY inside the Capacitor app (injected by agriventure-app.js),
+   so the desktop website is never affected. Themed with the portal's OWN
+   variables (--ag-*) and its dark class (.ag-dark on .agriventure-app),
+   so light AND dark both work. Deploy = scp + clear-cache.
+   ============================================================ */
+
+/* module accents (readable on both light --ag-panel #fff and dark #101621) */
+.agriventure-app{
+  --agx-green:#2E9E44; --agx-green-deep:#1F7A34;
+  --acc-mr:#6D5EF6; --acc-sq:#0EA5E9; --acc-po:#2E9E44;
+  --acc-pr:#0E9C8B; --acc-pi:#F59E0B; --acc-pe:#EC4899; --acc-preq:#F97316;
+}
+.agriventure-app.ag-dark{ /* lift accents a touch on near-black */
+  --acc-po:#37B457; --acc-pr:#19C0AA;
+}
+
+/* ---- kill the web-isms so it reads like an app ---- */
+.agriventure-app, .agriventure-app *{ -webkit-tap-highlight-color:transparent; }
+body.ag-portal-active{ overscroll-behavior:none; }
+.agriventure-app :not(input):not(textarea):not(select):not([contenteditable]){
+  -webkit-user-select:none; user-select:none;
+}
+
+/* ---- TOP BAR: clear the phone status bar (belt-and-suspenders with the
+        native StatusBar plugin). Do NOT touch its background — the portal
+        already themes it (#fff / .ag-dark #101621). ---- */
+.agriventure-app .ag-topbar{ padding-top:env(safe-area-inset-top, 0px); }
+.agriventure-app .ag-sidebar{ padding-top:env(safe-area-inset-top, 0px); }
+.agriventure-app .ag-crumb{ min-width:0; }
+.agriventure-app .ag-crumb b{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ---- colourful dashboard hero ---- */
+.agriventure-app .ag-dashboard-head{
+  background:linear-gradient(135deg,
+      color-mix(in srgb, var(--agx-green) 13%, transparent),
+      color-mix(in srgb, var(--ag-teal) 9%, transparent) 60%,
+      color-mix(in srgb, var(--acc-mr) 9%, transparent));
+  border:1px solid color-mix(in srgb, var(--agx-green) 20%, transparent);
+  border-radius:16px; padding:15px 15px 16px; margin-bottom:15px;
+}
+
+/* ---- KPI cards: per-module colour + accent stripe (themed surfaces) ---- */
+.agriventure-app .ag-summary-card{
+  position:relative; overflow:hidden; border-radius:15px;
+  border:1px solid var(--ag-border) !important;
+  transition:transform .15s ease;
+}
+.agriventure-app .ag-summary-card::before{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+  background:var(--acc, var(--ag-primary));
+}
+.agriventure-app .ag-summary-card:active{ transform:translateY(1px) scale(.99); }
+.agriventure-app .ag-summary-card .ag-summary-icon{
+  background:color-mix(in srgb, var(--acc, var(--ag-primary)) 16%, transparent) !important;
+  color:var(--acc, var(--ag-primary)) !important;
+}
+.agriventure-app .ag-summary-card strong{ color:var(--acc, var(--ag-primary)); }
+.agriventure-app .ag-summary-material-request{ --acc:var(--acc-mr); }
+.agriventure-app .ag-summary-supplier-quotation{ --acc:var(--acc-sq); }
+.agriventure-app .ag-summary-purchase-order{ --acc:var(--acc-po); }
+.agriventure-app .ag-summary-purchase-receipt{ --acc:var(--acc-pr); }
+.agriventure-app .ag-summary-purchase-invoice{ --acc:var(--acc-pi); }
+.agriventure-app .ag-summary-payment-entry{ --acc:var(--acc-pe); }
+.agriventure-app .ag-summary-payment-request{ --acc:var(--acc-preq); }
+
+/* ---- nav icons: soft green chip; active state themed ---- */
+.agriventure-app .ag-nav .ag-doc-icon{
+  background:color-mix(in srgb, var(--agx-green) 12%, transparent);
+  color:var(--agx-green);
+}
+.agriventure-app .ag-nav.active .ag-doc-icon{ background:var(--agx-green); color:#fff; }
+
+/* ---- gradient primary buttons (Riaan green) ---- */
+.agriventure-app .ag-button-primary{
+  background:linear-gradient(135deg,#40C057,#2E8B46) !important;
+  border-color:transparent !important;
+  box-shadow:0 8px 18px rgba(46,158,68,.28) !important;
+}
+
+/* ---- smooth transition on every content swap ---- */
+@keyframes agIn{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+.agriventure-app .ag-content > *{ animation:agIn .28s cubic-bezier(.22,1,.36,1); }
+@media (prefers-reduced-motion:reduce){ .agriventure-app .ag-content > *{ animation:none } }
+
+/* ============================================================
+   Bottom tab bar (appended INSIDE .agriventure-app → inherits --ag-* + .ag-dark)
+   ============================================================ */
+.agriventure-app .ag-content{ padding-bottom:78px !important; }   /* clear the bar */
+
+.agapp-tabbar{
+  position:fixed; left:0; right:0; bottom:0; z-index:1200;
+  display:flex; align-items:stretch; height:62px;
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+  background:var(--ag-panel);
+  border-top:1px solid var(--ag-border);
+  box-shadow:0 -6px 22px rgba(20,30,45,.08);
+  transition:transform .22s cubic-bezier(.22,1,.36,1);
+}
+.ag-dark .agapp-tabbar{ box-shadow:0 -6px 22px rgba(0,0,0,.35); }
+.agapp-tab{
+  flex:1; border:0; background:transparent; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  color:var(--ag-muted); font:inherit; font-size:10.5px; font-weight:600;
+  transition:color .15s ease; position:relative; padding:6px 0;
+}
+.agapp-tab svg{ width:23px; height:23px; stroke-width:1.9; transition:transform .18s cubic-bezier(.22,1,.36,1); }
+.agapp-tab.on{ color:var(--agx-green); }
+.agapp-tab.on svg{ transform:translateY(-1px) scale(1.06); }
+.agapp-tab.on::before{
+  content:""; position:absolute; top:0; width:26px; height:3px; border-radius:0 0 3px 3px;
+  background:linear-gradient(90deg,#40C057,#0E9C8B);
+}
+.agapp-tab:active svg{ transform:scale(.9); }
+
+/* raised centre "Sell" tab */
+.agapp-tab.agapp-primary .agapp-ic{
+  width:46px; height:46px; margin-top:-20px; border-radius:16px;
+  background:linear-gradient(135deg,#F59E0B,#F97316);
+  display:grid; place-items:center; box-shadow:0 10px 22px rgba(245,158,11,.42);
+  border:3px solid var(--ag-panel);
+}
+.agapp-tab.agapp-primary .agapp-ic svg{ width:24px; height:24px; color:#fff; }
+.agapp-tab.agapp-primary span{ color:var(--ag-muted); }
+
+/* ============================================================
+   Offline banner + pull-to-refresh
+   ============================================================ */
+.agapp-offline{
+  position:fixed; left:12px; right:12px; bottom:calc(70px + env(safe-area-inset-bottom, 0px));
+  z-index:1300; background:var(--ag-red, #c94459); color:#fff; border-radius:12px;
+  padding:10px 14px; font-size:12.5px; font-weight:600; text-align:center;
+  box-shadow:0 10px 30px rgba(200,71,94,.35); transform:translateY(160%);
+  transition:transform .3s cubic-bezier(.22,1,.36,1);
+}
+.agapp-offline.show{ transform:none; }
+
+.agapp-ptr{
+  position:fixed; left:0; right:0; top:env(safe-area-inset-top, 0px); display:flex; justify-content:center;
+  pointer-events:none; z-index:40; transform:translateY(-40px); opacity:0; transition:transform .12s, opacity .2s;
+}
+.agapp-ptr.ready .agapp-ptr-spin{ border-top-color:var(--agx-green-deep, var(--agx-green)); transform:scale(1.08); }
+.agapp-ptr .agapp-ptr-spin{
+  margin-top:8px; width:26px; height:26px; border-radius:50%;
+  border:2.6px solid color-mix(in srgb, var(--agx-green) 25%, transparent);
+  border-top-color:var(--agx-green);
+}
+.agapp-ptr.spin .agapp-ptr-spin{ animation:agSpin .7s linear infinite; }
+@keyframes agSpin{ to{ transform:rotate(360deg) } }
+
+/* ============================================================
+   Drawer-aware + POS-aware + desktop-only Collapse
+   ============================================================ */
+/* desktop sidebar-rail toggle has no purpose in the phone drawer */
+.agriventure-app .ag-collapse-toggle{ display:none !important; }
+/* while the drawer is open, slide the tab bar away so the drawer footer
+   (user + logout) is fully usable and nothing intercepts taps */
+body.agri-drawer-open .agapp-tabbar{ transform:translateY(120%); pointer-events:none; }
+.agriventure-app .ag-sidebar .ag-user{ padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)); }
+/* POS checkout is full-screen with its own cart/Pay bar: hide the tab bar */
+body.agri-pos-open .agapp-tabbar{ transform:translateY(120%); pointer-events:none; }
+body.agri-pos-open .agriventure-app .ag-content{ padding-bottom:0 !important; }
+
+/* ============================================================
+   Version chip (drawer footer) + "update available" banner
+   ============================================================ */
+.agapp-ver{
+  margin:0 12px 12px; display:flex; align-items:center; gap:8px;
+  padding:8px 11px; border-radius:10px; border:1px solid var(--ag-border);
+  background:transparent; color:var(--ag-muted); font:inherit; font-size:11px; text-align:left; cursor:pointer;
+}
+.agapp-ver b{ color:var(--ag-text); font-weight:700; }
+.agapp-ver small{ margin-left:auto; color:var(--agx-green); font-weight:700; }
+.agapp-ver .agapp-ver-dot{ width:7px; height:7px; border-radius:50%; background:var(--agx-green); flex:none; }
+.agapp-ver.outdated{ border-color:color-mix(in srgb, var(--ag-amber) 45%, transparent); background:color-mix(in srgb, var(--ag-amber) 8%, transparent); }
+.agapp-ver.outdated small{ color:var(--ag-amber); }
+.agapp-ver.outdated .agapp-ver-dot{ background:var(--ag-amber); animation:agPulse 1.6s ease-in-out infinite; }
+@keyframes agPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.agapp-update{
+  position:fixed; left:10px; right:10px; top:calc(env(safe-area-inset-top, 0px) + 62px);
+  z-index:1400; display:flex; align-items:center; gap:10px;
+  padding:11px 12px; border-radius:14px; background:var(--ag-panel);
+  border:1px solid color-mix(in srgb, var(--agx-green) 32%, transparent);
+  box-shadow:0 16px 36px rgba(20,40,25,.20);
+  transform:translateY(-160%); transition:transform .32s cubic-bezier(.22,1,.36,1);
+}
+.ag-dark .agapp-update{ box-shadow:0 16px 36px rgba(0,0,0,.5); }
+.agapp-update.show{ transform:none; }
+.agapp-update-txt{ flex:1; min-width:0; line-height:1.3; }
+.agapp-update-txt b{ display:block; font-size:13px; color:var(--ag-text); }
+.agapp-update-txt span{ display:block; font-size:11px; color:var(--ag-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.agapp-update-btn{
+  flex:none; border:0; border-radius:10px; padding:9px 15px; font:inherit; font-size:12.5px; font-weight:700;
+  color:#fff; background:linear-gradient(135deg,#40C057,#2E8B46); box-shadow:0 6px 16px rgba(46,158,68,.3);
+}
+.agapp-update-x{ flex:none; border:0; background:transparent; color:var(--ag-muted); font-size:20px; width:26px; height:26px; line-height:1; }
+
+/* ============================================================
+   In-app document (Print / PDF) viewer — Back always works
+   ============================================================ */
+.agapp-docview{ position:fixed; inset:0; z-index:2000; display:flex; flex-direction:column; background:var(--ag-panel); }
+.agapp-docbar{
+  flex:none; display:flex; align-items:center; gap:8px;
+  padding:env(safe-area-inset-top, 0px) 10px 0 6px;
+  height:calc(52px + env(safe-area-inset-top, 0px));
+  border-bottom:1px solid var(--ag-border); background:var(--ag-panel);
+}
+.agapp-docback{ border:0; background:transparent; color:var(--agx-green); font:inherit; font-size:14px; font-weight:700; padding:8px 10px; display:flex; align-items:center; gap:2px; }
+.agapp-doctitle{ flex:1; text-align:center; font-size:13px; font-weight:700; color:var(--ag-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.agapp-docprint{ border:0; border-radius:9px; background:linear-gradient(135deg,#40C057,#2E8B46); color:#fff; font:inherit; font-size:12px; font-weight:700; padding:8px 12px; }
+.agapp-docframe{ flex:1; width:100%; border:0; background:#fff; }
+
+/* ============================================================
+   MOBILE: child (items) table → stacked cards (no horizontal scroll)
+   + smaller financial-year picker
+   ============================================================ */
+@media (max-width:720px){
+  /* items-table card layout REVERTED 2026-09-11 — inline table cells made the
+     Frappe inputs unusable on mobile; a dedicated item-entry design is pending. */
+
+  /* --- smaller financial-year picker --- */
+  .agriventure-app .ag-financial-year{ min-width:0; }
+  .agriventure-app .ag-financial-year > span{ font-size:8px; }
+  .agriventure-app .ag-fy-slot{ max-width:118px; }
+  .agriventure-app .ag-financial-year b{ font-size:12px; }
+  .agriventure-app .ag-fy-slot .form-control,
+  .agriventure-app .ag-fy-slot input,
+  .agriventure-app .ag-financial-year input{ min-height:30px !important; height:30px; font-size:11px !important; padding:0 8px !important; }
+}
+
+/* ============================================================
+   MOBILE ITEM ENTRY — summary cards + edit sheet
+   ============================================================ */
+@media (max-width:720px){
+  .agriventure-app .ag-child-table.agapp-cardmode .ag-child-scroll{ display:none; }         /* hide the real grid */
+  .agriventure-app .ag-child-table.agapp-cardmode .ag-child-head-actions{ display:none; }   /* my Add Item replaces it */
+  .agriventure-app .agapp-items{ display:flex; flex-direction:column; gap:9px; padding:10px; }
+  .agapp-itemcard{
+    display:flex; align-items:center; gap:11px; width:100%; text-align:left;
+    border:1px solid var(--ag-border); background:var(--ag-panel); border-radius:13px; padding:11px 12px; font:inherit;
+  }
+  .agapp-itemcard:active{ transform:scale(.995); }
+  .agapp-inum{ width:24px; height:24px; border-radius:7px; background:var(--agx-green); color:#fff; display:grid; place-items:center; font-size:11px; font-weight:800; flex:none; font-family:var(--font-mono, monospace); }
+  .agapp-iinfo{ flex:1; min-width:0; }
+  .agapp-iinfo b{ display:block; font-size:14px; font-weight:600; color:var(--ag-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .agapp-ichips{ display:flex; gap:6px; margin-top:5px; flex-wrap:wrap; }
+  .agapp-ichip{ font-size:10.5px; color:var(--ag-muted); background:var(--ag-bg); border:1px solid var(--ag-border); border-radius:6px; padding:2px 7px; white-space:nowrap; }
+  .agapp-idel{ color:var(--ag-red,#c94459); flex:none; padding:4px; display:grid; place-items:center; }
+  .agapp-idel svg{ width:17px; height:17px; }
+  .agapp-igo{ color:var(--ag-muted); flex:none; }
+  .agapp-igo svg{ width:18px; height:18px; }
+  .agapp-additem{
+    display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:46px;
+    border:1.5px dashed var(--agx-green); background:color-mix(in srgb, var(--agx-green) 8%, transparent);
+    color:var(--agx-green-deep, var(--agx-green)); border-radius:12px; font:inherit; font-size:14px; font-weight:700;
+  }
+  .agapp-additem svg{ width:18px; height:18px; }
+}
+/* the sliding sheet (rendered inside .agriventure-app → themed + safe-area aware) */
+.agapp-itemsheet{
+  position:fixed; inset:0; z-index:2100; background:var(--ag-bg); display:flex; flex-direction:column;
+  transform:translateY(100%); transition:transform .3s cubic-bezier(.22,1,.36,1);
+}
+.agapp-itemsheet.show{ transform:none; }
+.agapp-sheet-grab{ width:38px; height:4px; border-radius:99px; background:var(--ag-border); margin:calc(env(safe-area-inset-top,0px) + 8px) auto 4px; }
+.agapp-sheet-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:2px 12px 11px; border-bottom:1px solid var(--ag-border); background:var(--ag-panel); }
+.agapp-sheet-head b{ font-size:15px; font-weight:700; color:var(--ag-text); }
+.agapp-sheet-x{ border:0; background:transparent; color:var(--agx-green); font:inherit; font-size:14px; font-weight:700; display:flex; align-items:center; gap:2px; padding:6px; }
+.agapp-sheet-x svg{ width:18px; height:18px; }
+.agapp-sheet-done{ border:0; border-radius:9px; background:linear-gradient(135deg,#40C057,#2E8B46); color:#fff; font:inherit; font-size:13px; font-weight:700; padding:8px 16px; }
+.agapp-sheet-body{ flex:1; overflow:auto; padding:15px 15px calc(20px + env(safe-area-inset-bottom,0px)); background:var(--ag-bg); }
+.agapp-field{ margin-bottom:15px; }
+.agapp-flabel{ display:block; font-size:11px; letter-spacing:.03em; text-transform:uppercase; color:var(--ag-muted); font-weight:700; margin-bottom:6px; }
+.agapp-fval{ font-size:14px; color:var(--ag-text); }
+/* the real Frappe control, now full width in the sheet */
+.agapp-field .frappe-control{ width:100%; margin:0; }
+.agapp-field .control-label{ display:none !important; }
+.agapp-field .form-control,
+.agapp-field .input-with-feedback,
+.agapp-field select,
+.agapp-field textarea,
+.agapp-field .like-disabled-input{
+  width:100% !important; min-height:48px !important; border:1.5px solid var(--ag-border) !important;
+  border-radius:12px !important; background:var(--ag-panel) !important; color:var(--ag-text) !important;
+  font-size:14.5px !important; padding:9px 13px !important; box-shadow:none !important;
+}
+.agapp-field textarea{ min-height:72px !important; }
+/* hide the bottom tab bar while the sheet is open */
+body.agri-sheet-open .agapp-tabbar{ transform:translateY(120%); pointer-events:none; }
+
+/* ============================================================
+   Frappe STANDARD grids inside dialogs (POS Opening/Closing balance).
+   Frappe edits inline, so each row becomes a card whose columns stack
+   vertically with labels — full width, tap-to-edit, no sideways scroll.
+   Real DOM: .grid-row > .data-row > .row-check + .row-index + .grid-static-col
+             (each has .static-area = value, .field-area = the edit control)
+   ============================================================ */
+/* full-screen dialog on mobile when it holds a Frappe grid (POS opening/closing) */
+@media (max-width:720px){
+  .modal.agapp-has-fgrid{ padding:0 !important; }
+  .modal.agapp-has-fgrid .modal-dialog{ margin:0 !important; max-width:100% !important; width:100% !important; min-height:100% !important; }
+  .modal.agapp-has-fgrid .modal-content{ min-height:100vh; border-radius:0 !important; border:0 !important; box-shadow:none !important; }
+  .modal.agapp-has-fgrid .modal-body{ max-height:none !important; overflow-y:auto !important; }
+}
+/* Frappe grid → OUR cards + sheet (POS opening/closing balance) */
+.agapp-fhide{ display:none !important; }
+.agapp-fcards{ display:flex; flex-direction:column; gap:8px; padding:9px 0 4px; }
+body.agri-fsheet-open .agapp-tabbar{ transform:translateY(120%); pointer-events:none; }
+.agapp-itemsheet .agapp-fin{
+  width:100% !important; min-height:48px; border:1.5px solid var(--ag-border); border-radius:12px;
+  background:var(--ag-panel); color:var(--ag-text); font:inherit; font-size:14.5px; padding:9px 13px; box-shadow:none;
+}
+.agapp-itemsheet select.agapp-fin{ -webkit-appearance:none; appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ag-muted) 50%),linear-gradient(135deg,var(--ag-muted) 50%,transparent 50%);
+  background-position:calc(100% - 18px) 21px,calc(100% - 13px) 21px; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:34px; }
+.agapp-itemsheet .agapp-fin:focus{ outline:none; border-color:var(--agx-green); box-shadow:0 0 0 3px color-mix(in srgb,var(--agx-green) 18%,transparent); }
+
+/* LIST views → record cards (Phase 2) */
+.agapp-listcards{ display:flex; flex-direction:column; gap:8px; padding:2px 0 4px; }
+.agapp-listempty{ text-align:center; color:var(--ag-muted); font-size:12.5px; padding:26px 0; }
+.agapp-lcard{ display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:var(--ag-panel); border:1px solid var(--ag-border); border-radius:13px; padding:11px 12px; font:inherit; box-shadow:var(--ag-shadow, 0 6px 20px rgba(20,40,25,.05)); }
+.agapp-lcard:active{ transform:scale(.995); }
+.agapp-lb{ width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, var(--agx-green) 12%, transparent); color:var(--agx-green-deep, var(--agx-green)); display:grid; place-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; flex:none; }
+.agapp-lc{ flex:1; min-width:0; }
+.agapp-lc b{ display:block; font-size:13px; font-weight:600; color:var(--ag-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--font-mono, inherit); }
+.agapp-ls{ display:block; font-size:12px; color:var(--ag-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.agapp-lr{ flex:none; display:flex; flex-direction:column; gap:4px; align-items:flex-end; max-width:44%; }
+.agapp-la{ font-family:var(--font-mono, monospace); font-size:12.5px; font-weight:600; color:var(--ag-text); white-space:nowrap; }
+.agapp-lp{ font-size:10px; font-weight:600; padding:3px 8px; border-radius:999px; white-space:nowrap; display:inline-flex; align-items:center; gap:4px; }
+.agapp-lp::before{ content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
+.agapp-lp-ok{ background:var(--ag-teal-soft, rgba(14,156,139,.12)); color:var(--ag-teal, #0c9d87); }
+.agapp-lp-d{ background:var(--ag-amber-soft, rgba(176,116,26,.11)); color:var(--ag-amber, #b0741a); }
+.agapp-lp-e{ background:var(--ag-red-soft, rgba(200,71,94,.09)); color:var(--ag-red, #c8475e); }
+@media (max-width:720px){
+  .agapp-fgrid .grid-heading-row{ display:none !important; }
+  .agapp-fgrid .grid-empty{
+    display:flex !important; align-items:center; justify-content:center; min-height:52px !important;
+    padding:14px !important; font-size:12.5px; color:var(--ag-muted);
+  }
+  .agapp-fgrid .grid-empty .grid-empty-illustration{ display:none !important; }
+  .agapp-fgrid .grid-body .rows{ padding:7px !important; display:block !important; }
+  /* --- kill every positioning trick so cells can never overlap --- */
+  .agapp-fgrid .grid-body .grid-row{
+    position:relative !important; height:auto !important; min-height:0 !important;
+    border:1px solid var(--ag-border) !important; border-radius:12px !important;
+    background:var(--ag-panel) !important; margin:0 0 9px !important;
+  }
+  .agapp-fgrid .grid-body .grid-row .data-row{
+    display:block !important; position:static !important; height:auto !important; min-height:0 !important;
+    padding:12px 12px 9px !important; margin:0 !important; width:auto !important;
+  }
+  .agapp-fgrid .grid-body .grid-row .data-row .row-check{ position:absolute !important; top:9px; right:9px; width:auto !important; padding:0 !important; margin:0 !important; }
+  .agapp-fgrid .grid-body .grid-row .data-row .row-index{ display:none !important; }
+  .agapp-fgrid .grid-body .grid-row .grid-static-col{
+    display:block !important; position:static !important; float:none !important; clear:both !important;
+    left:auto !important; right:auto !important; top:auto !important; bottom:auto !important; transform:none !important;
+    width:100% !important; max-width:100% !important; height:auto !important; min-height:0 !important;
+    padding:6px 0 !important; margin:0 !important; text-align:left !important; border:0 !important;
+  }
+  .agapp-fgrid .grid-body .grid-row .grid-static-col::before{
+    content:attr(data-label); display:block; font-size:10px; text-transform:uppercase; letter-spacing:.02em;
+    color:var(--ag-muted); font-weight:700; margin-bottom:5px;
+  }
+  /* value = plain text (no box); the box only appears when editing (.field-area) */
+  .agapp-fgrid .grid-static-col .static-area{
+    font-size:14px !important; color:var(--ag-text) !important; white-space:normal !important; overflow:visible !important;
+    display:block !important; position:static !important; padding:3px 0 !important; border:0 !important; background:transparent !important; min-height:22px;
+  }
+  .agapp-fgrid .grid-static-col .static-area:empty::before{ content:"Tap to enter"; color:var(--ag-muted); }
+  .agapp-fgrid .grid-static-col .field-area:not(:empty) ~ .static-area{ display:none !important; }  /* no double box while editing */
+  .agapp-fgrid .grid-static-col .field-area{ width:100% !important; position:static !important; }
+  .agapp-fgrid .grid-static-col .field-area .frappe-control{ width:100% !important; margin:0 !important; }
+  .agapp-fgrid .grid-static-col .field-area .form-control,
+  .agapp-fgrid .grid-static-col .field-area .input-with-feedback,
+  .agapp-fgrid .grid-static-col .field-area select,
+  .agapp-fgrid .grid-static-col .field-area input{
+    width:100% !important; min-height:44px !important; border:1.5px solid var(--ag-border) !important;
+    border-radius:10px !important; background:var(--ag-panel) !important; color:var(--ag-text) !important;
+    font-size:14px !important; padding:8px 11px !important; box-shadow:none !important;
+  }
+  .agapp-fgrid .grid-footer{ padding:8px !important; }
+  .agapp-fgrid .grid-footer .grid-add-row{
+    background:color-mix(in srgb, var(--agx-green) 10%, transparent) !important;
+    color:var(--agx-green-deep, var(--agx-green)) !important; border:1.5px dashed var(--agx-green) !important;
+    border-radius:11px !important; padding:10px 14px !important; font-weight:700 !important; width:100%;
+  }
+}
+
+/* ============================================================
+   PHASE 3 — Document detail + Reports, styled as native app screens.
+   All under .agriventure-app + phone width, themed with --ag-* / --agx-*.
+   ============================================================ */
+@media (max-width:720px){
+
+  /* ---------- Document detail / form view ---------- */
+  .agriventure-app .ag-form-head{
+    display:flex; flex-direction:column; gap:11px;
+    background:linear-gradient(135deg,
+        color-mix(in srgb, var(--agx-green) 10%, transparent),
+        color-mix(in srgb, var(--acc-mr) 7%, transparent));
+    border:1px solid color-mix(in srgb, var(--agx-green) 18%, transparent);
+    border-radius:16px; padding:14px 14px 15px; margin:0 0 14px;
+  }
+  .agriventure-app .ag-form-eyebrow{
+    display:flex; gap:7px; flex-wrap:wrap; align-items:baseline;
+    font-size:11px; letter-spacing:.03em; text-transform:uppercase; color:var(--ag-muted);
+  }
+  .agriventure-app .ag-form-eyebrow b{ color:var(--ag-text); font-size:12px; text-transform:none; letter-spacing:0; }
+  .agriventure-app .ag-form-heading{ display:flex; flex-direction:column; gap:8px; }
+  .agriventure-app .ag-form-heading h1{ font-size:20px; line-height:1.25; margin:0; word-break:break-word; }
+  .agriventure-app .ag-doc-state{ align-self:flex-start; }
+
+  .agriventure-app .ag-form-actions{ display:flex; flex-wrap:wrap; gap:8px; }
+  .agriventure-app .ag-form-actions .ag-button{ min-height:44px; border-radius:12px; font-weight:650; }
+  /* "Back to List" first + full width, so there's always one clear way back */
+  .agriventure-app .ag-form-actions .ag-back{
+    order:-1; flex:1 1 100%; justify-content:center;
+    background:var(--ag-panel) !important;
+    color:var(--agx-green-deep, var(--agx-green)) !important;
+    border:1.5px solid color-mix(in srgb, var(--agx-green) 32%, transparent) !important;
+  }
+  .agriventure-app .ag-form-actions .ag-icon-button{ flex:0 0 auto; min-width:44px; }
+  .agriventure-app .ag-form-actions .ag-button-primary{ flex:1 1 auto; }
+
+  /* tabs → single-row horizontal scroller */
+  .agriventure-app .ag-form-tabs .ag-tab-list{
+    display:flex; gap:7px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    padding:2px 2px 8px; margin:0 0 12px; scrollbar-width:none;
+  }
+  .agriventure-app .ag-form-tabs .ag-tab-list::-webkit-scrollbar{ display:none; }
+  .agriventure-app .ag-tab-button{
+    flex:0 0 auto; white-space:nowrap; min-height:38px; border-radius:10px;
+    border:1px solid var(--ag-border); background:var(--ag-panel); color:var(--ag-muted); padding:7px 14px; font-weight:600;
+  }
+  .agriventure-app .ag-tab-button.active{
+    background:color-mix(in srgb, var(--agx-green) 12%, transparent);
+    border-color:color-mix(in srgb, var(--agx-green) 34%, transparent);
+    color:var(--agx-green-deep, var(--agx-green));
+  }
+
+  /* body single column; activity moves below the form */
+  .agriventure-app .ag-form-body,
+  .agriventure-app .ag-form-body.has-activity{ display:block; }
+  .agriventure-app .ag-form-main{ width:100%; }
+
+  /* sections → cards, fields full width */
+  .agriventure-app .ag-form-section{
+    background:var(--ag-panel); border:1px solid var(--ag-border); border-radius:14px;
+    padding:14px 13px 3px; margin:0 0 12px; box-shadow:var(--ag-shadow, 0 6px 20px rgba(20,40,25,.05));
+  }
+  .agriventure-app .ag-form-section > header h2{
+    font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ag-muted); margin:0 0 10px;
+  }
+  .agriventure-app .ag-form-grid{ display:block; }
+  .agriventure-app .ag-field-slot,
+  .agriventure-app .ag-field-slot.ag-field-half{ width:100% !important; margin:0 0 13px !important; }
+
+  /* activity / timeline → its own card */
+  .agriventure-app aside.ag-activity{
+    margin:2px 0 12px; background:var(--ag-panel); border:1px solid var(--ag-border);
+    border-radius:14px; padding:2px 8px; box-shadow:var(--ag-shadow, 0 6px 20px rgba(20,40,25,.05));
+  }
+  .agriventure-app .ag-activity-head{ width:100%; padding:13px 6px; }
+  .agriventure-app .ag-activity-item{ padding:11px 6px; }
+
+  /* ---------- KPI dashboard (Reports landing) ---------- */
+  .agriventure-app .ag-kpi-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .agriventure-app .ag-kpi-card{
+    position:relative; overflow:hidden; border-radius:14px; padding:13px 12px;
+    border:1px solid var(--ag-border); background:var(--ag-panel);
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .agriventure-app .ag-kpi-card::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--kpi, var(--agx-green)); }
+  .agriventure-app .ag-kpi-green{ --kpi:var(--acc-po); }
+  .agriventure-app .ag-kpi-blue{ --kpi:var(--acc-sq); }
+  .agriventure-app .ag-kpi-amber,.agriventure-app .ag-kpi-orange{ --kpi:var(--acc-pi); }
+  .agriventure-app .ag-kpi-teal{ --kpi:var(--acc-pr); }
+  .agriventure-app .ag-kpi-purple,.agriventure-app .ag-kpi-iris{ --kpi:var(--acc-mr); }
+  .agriventure-app .ag-kpi-red,.agriventure-app .ag-kpi-pink{ --kpi:var(--acc-pe); }
+  .agriventure-app .ag-kpi-label{ font-size:11.5px; color:var(--ag-muted); line-height:1.3; }
+  .agriventure-app .ag-kpi-value{ font-size:22px; font-weight:750; color:var(--kpi, var(--ag-text)); }
+
+  .agriventure-app .ag-kpi-heading{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ag-muted); margin:18px 0 11px; }
+  .agriventure-app .ag-kpi-tiles{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .agriventure-app .ag-kpi-tile{
+    display:flex; flex-direction:column; align-items:flex-start; gap:9px; text-align:left; min-height:84px; font:inherit;
+    background:var(--ag-panel); border:1px solid var(--ag-border); border-radius:13px; padding:13px 12px;
+  }
+  .agriventure-app .ag-kpi-tile:active{ transform:scale(.985); }
+  .agriventure-app .ag-kpi-tile-icon{
+    width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    background:color-mix(in srgb, var(--agx-green) 13%, transparent); color:var(--agx-green);
+  }
+  .agriventure-app .ag-kpi-date{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:6px; }
+  .agriventure-app .ag-kpi-day{
+    min-height:42px; border-radius:11px; border:1.5px solid var(--ag-border);
+    background:var(--ag-panel); color:var(--ag-text); padding:6px 11px;
+  }
+
+  /* ---------- Report views: filters, modes, charts ---------- */
+  .agriventure-app .ag-filter-toolbar{
+    display:flex; flex-direction:column; gap:11px; grid-template-columns:none !important;
+    background:var(--ag-panel); border:1px solid var(--ag-border); border-radius:14px; padding:13px; margin-bottom:12px;
+  }
+  .agriventure-app .ag-filter-toolbar .ag-filter-control{ width:100%; }
+  .agriventure-app .ag-filter-toolbar .ag-filter-clear{ align-self:flex-start; min-height:40px; }
+
+  .agriventure-app .ag-rep-modes{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  .agriventure-app .ag-rep-mode{ flex:1 1 auto; min-height:44px; border-radius:12px; }
+  .agriventure-app .ag-rep-mode-spacer{ flex:1 1 100%; height:0; }
+  .agriventure-app .ag-rep-export{ flex:1 1 auto; min-height:44px; border-radius:12px; }
+
+  .agriventure-app .ag-rep-chart-card{
+    background:var(--ag-panel); border:1px solid var(--ag-border); border-radius:14px;
+    padding:12px; margin-bottom:12px; overflow-x:auto;
+  }
+  .agriventure-app .ag-report-body{ overflow-x:auto; }
+}

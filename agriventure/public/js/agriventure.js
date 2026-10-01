@@ -1,4 +1,4 @@
-frappe.pages["agriventure"].on_page_load = function (wrapper) {
+frappe.pages["agriventure-portal"].on_page_load = function (wrapper) {
 	document.body.classList.add("ag-portal-active");
 	window.__agPortal = new AgriventurePortal(wrapper);
 	window.__agPortal.start();
@@ -18,14 +18,28 @@ if (!window.__agBackNav) {
 	}, true);
 }
 
-frappe.pages["agriventure"].on_page_show = function () {
+frappe.pages["agriventure-portal"].on_page_show = function () {
 	document.body.classList.add("ag-portal-active");
+	// Frappe reuses this page's existing DOM/instance on every return visit instead of
+	// reloading it, so a route change while it was already open (e.g. Dux Portal linking
+	// to a different kind than the one already on screen) would otherwise go unnoticed -
+	// the route is normally only ever read once, in openInitialRoute(). Re-run that here
+	// whenever the route has actually moved on since the last time it was read.
+	const portal = window.__agPortal;
+	// not booted yet: start() reads the route itself once the boot is in, so there is
+	// nothing to do here and everything to break by trying
+	if (!portal || !portal.boot) return;
+	const routeStr = frappe.get_route_str ? frappe.get_route_str() : "";
+	if (routeStr === portal.lastRouteStr) return;
+	portal.openInitialRoute();
 };
 
 if (frappe.router && frappe.router.on) {
 	frappe.router.on("change", () => {
 		const route = frappe.get_route_str ? frappe.get_route_str() : "";
-		document.body.classList.toggle("ag-portal-active", route === "agriventure");
+		// startsWith, not ===: a shortcut/bookmark landing on /agriventure-portal/purchase-order
+		// (or deeper, e.g. .../purchase-order/PO-2026-00001) is still this same portal.
+		document.body.classList.toggle("ag-portal-active", route === "agriventure-portal" || route.startsWith("agriventure-portal/"));
 	});
 }
 
@@ -74,16 +88,30 @@ const COMPANY_SCOPED_LINKS = [
 // this workspace opens on the desk, which is what the desk button does anyway.
 const DOC_MENUS = {
 	"purchase-receipt": [
-		{ key: "lcv", group: "Create", label: "Landed Cost Voucher", when: (doc) => doc.docstatus === 1 },
+		// lcv/stock-entry/retention forced off (when: () => false) rather than removed, so the
+		// erpnext-sourced conditions above stay on record - per request 2026-09-05 this portal's
+		// Create menu on Purchase Receipt shows Purchase Return only
+		{ key: "lcv", group: "Create", label: "Landed Cost Voucher", when: () => false },
 		{ key: "return", group: "Create", label: "Purchase Return", when: (doc) => doc.open },
-		{ key: "stock-entry", group: "Create", label: "Make Stock Entry", when: (doc) => doc.open },
-		{ key: "retention", group: "Create", label: "Retention Stock Entry", when: (doc) => doc.open },
+		{ key: "stock-entry", group: "Create", label: "Make Stock Entry", when: () => false },
+		{ key: "retention", group: "Create", label: "Retention Stock Entry", when: () => false },
 		{ key: "stock-ledger", group: "View", label: "Stock Ledger", when: (doc) => doc.docstatus > 0 },
 		{ key: "accounting-ledger", group: "View", label: "Accounting Ledger", when: (doc) => doc.docstatus > 0 },
 		{ key: "asset", group: "View", label: "Asset", when: (doc) => doc.docstatus > 0 },
 		{ key: "asset-movement", group: "View", label: "Asset Movement", when: (doc) => doc.docstatus > 0 },
 		{ key: "close", group: "Status", label: "Close", when: (doc) => doc.open },
 		{ key: "reopen", group: "Status", label: "Reopen", when: (doc) => doc.docstatus === 1 && doc.status === "Closed" },
+	],
+	"journal-entry": [
+		// the desk's View > Ledger: the General Ledger narrowed to this voucher. The
+		// handler is the one Purchase Receipt already uses - same report, same window,
+		// and it reads show_cancelled_entries off the docstatus by itself.
+		{ key: "accounting-ledger", group: "View", label: "Ledger", when: (doc) => doc.docstatus > 0 },
+	],
+	"pos-invoice": [
+		// the same condition the desk uses - pos_invoice.js:78 offers Return on a
+		// submitted invoice that is not itself a return
+		{ key: "pos-return", group: "Create", label: "Return", when: (doc) => doc.open },
 	],
 };
 
@@ -97,7 +125,7 @@ const LINKED_ROW_FIELDS = {
 };
 
 // Documents that carry a Connections tab, the way the desk shows one
-const CONNECTION_KINDS = ["material-request", "supplier-quotation", "purchase-order",
+const CONNECTION_KINDS = ["payment-request", "material-request", "supplier-quotation", "purchase-order",
 	"purchase-receipt", "purchase-invoice", "payment-entry"];
 
 const PARENT_ROW_FIELDS = {
@@ -108,6 +136,18 @@ const PARENT_ROW_FIELDS = {
 // Series and Status are the document's own account of itself. Once it is submitted both
 // are settled and read as clutter, and the badge beside the title already carries the
 // state - so the form drops them, the way the reference screens show them dropped.
+// The mirror of the map below: fields with nothing in them until the document exists.
+// A Stock Entry reference is written by after_insert, and the two amounts are derived
+// from quantity and rate - all three sit blank on a form nobody has saved yet. They
+// are still computed and still sent; they simply are not shown until there is
+// something to show.
+const HIDE_UNTIL_SAVED = {
+	"fuel-for-stock": ["stock_entry_reference", "amountffs", "aamountffs"],
+	// the total is added up from the rows below it, so on a blank form it is a zero
+	// nobody needs to look at - still computed, still sent, just not shown yet
+	"fuel-for-distribution": ["stock_entry_reference", "issued_quantity_ltr"],
+};
+
 const HIDE_AFTER_SUBMIT = {
 	"material-request": ["naming_series", "status"],
 	"supplier-quotation": ["naming_series", "status"],
@@ -130,11 +170,49 @@ const ADDRESS_DISPLAY_FIELDS = {
 const CONTACT_DISPLAY_FIELDS = ["contact_display", "contact_email", "contact_mobile",
 	"contact_phone", "contact_designation", "contact_department"];
 
+// A section the DocType's own form script shows or hides, rather than declaring a
+// depends_on the metadata carries. Attendance Log does exactly this in its attendance_log.js:
+//     frm.toggle_display("logout_section", !!frm.doc.log_out_al)
+// The portal never loads that script, so the same rule is restated here in the form the
+// portal already understands - and it stays the doctype's rule, not a new one.
+const SECTION_DEPENDS_ON = {
+	"attendance-log": { logout_section: "eval:doc.log_out_al" },
+};
+
+// Where the app's own name at the top of the sidebar leads. On this install the
+// workspace sits inside a larger portal, so the logo goes back to that rather than
+// to the bare Desk. One line to change if that ever moves.
+// where the collapsed/expanded choice is remembered for this browser
+const RAIL_KEY = "agriventure:sidebar-rail";
+
+const PORTAL_ROUTE = "agriventure-portal";
+
+const BRAND_HOME = "/app/dux-portal";
+
 const SHOW_PRINT_ACTIONS = true;
 
+// The print format each kind is printed with - this site's own where it has one, so
+// the portal puts out the same paper the desk has always put out rather than a second
+// design of its own. Anything not named here falls through to Frappe's Standard, which
+// is exactly what the desk does for it too (Material Request, for one, has no custom
+// format on this site).
+//
+// Purchase Order and Purchase Receipt each have two near-identical formats, one of them
+// a misspelt copy. The live one is named here: New PO Format was last edited in August
+// and is the one the desk shows; New PO Formate has sat untouched since February.
+const PRINT_FORMATS = {
+	"purchase-order": "New PO Format",
+	"purchase-receipt": "New Purchase Receipt",
+};
+
+// The portal used to draw its own print layout - printLayout() and the document_print /
+// document_pdf endpoints behind it. All of that is still here and still works; setting
+// this to false brings it straight back.
+const PRINT_VIA_DESK = true;
+
 // documents that carry an approval trail worth showing beside the form
-const ACTIVITY_KINDS = ["material-request", "supplier-quotation", "purchase-order",
-	"purchase-receipt", "purchase-invoice", "payment-entry"];
+const ACTIVITY_KINDS = ["payment-request", "material-request", "supplier-quotation", "purchase-order",
+	"purchase-receipt", "purchase-invoice", "payment-entry", "journal-entry"];
 
 // forms that offer file attachments, using Frappe's own File records rather than a
 // DocType field, so nothing new appears on the standard desk form
@@ -152,7 +230,7 @@ const ATTENDANCE_KINDS = ["attendance-log", "shift-details"];
 const CROP_KINDS = ["harvest-log", "spraying-log", "sowing-log", "fertigation-log"];
 
 // Point of sale configuration. Standard ERPNext doctypes, no customisation of our own.
-const POS_KINDS = ["pos-profile", "pos-opening-entry", "pos-closing-entry", "pos-invoice-merge-log"];
+const POS_KINDS = ["pos-profile", "pos-opening-entry", "pos-closing-entry", "pos-invoice", "pos-invoice-merge-log"];
 
 // only the profile is plain configuration; the two shift entries are submittable
 const POS_CONFIG_KINDS = ["pos-profile"];
@@ -160,10 +238,66 @@ const POS_CONFIG_KINDS = ["pos-profile"];
 // Stock movements, reached from the sidebar and from a crop log's reference.
 const STOCK_KINDS = ["stock-entry"];
 
+// Transport: fuel bought into a warehouse, then issued out to vehicles, and the
+// vehicles themselves. Owned by agriventure_nagpur_erp - this workspace shows them
+// and calls its two whitelisted methods, and changes nothing over there.
+const TRANSPORT_KINDS = ["fuel-for-stock", "fuel-for-distribution", "vehicle-details"];
+
+// The two that move stock. Each posts its Stock Entry from after_insert and its own
+// desk form then calls frm.disable_save(), because by the time it exists the stock
+// has already moved. Same rule here rather than a different one.
+const FUEL_LOCKED_KINDS = ["fuel-for-stock", "fuel-for-distribution"];
+
+// The proof of purchase: the only part of a saved fuel entry that can still be filled
+// in. Neither writes stock, so adding one changes nothing that has already happened.
+const FUEL_ATTACH_FIELDS = ["upload_invoice__invoice_copy",
+	"upload_fuel_station_proof__fuel_station_receipt"];
+
+const FUEL_NS = "agriventure_nagpur_erp.agriventure_nagpur_erp.doctype";
+const FUEL_STOCK_METHOD = `${FUEL_NS}.fuel_for_stock.fuel_for_stock.get_fuel_stock_by_warehouse`;
+const VEHICLE_READING_METHOD = `${FUEL_NS}.fuel_for_distribution.fuel_for_distribution.get_last_vehicle_reading_child`;
+
+// What counts as running low, in litres. Both desk scripts use 30 for diesel; they
+// disagree on petrol (3 in one, 5 in the other, and 3 and 5 within one block of the
+// same file), so the more cautious of the two is used.
+const FUEL_FLOOR = { Diesel: 30, Petrol: 5 };
+
+// Which crop log posts a Stock Entry, and the field each keeps the reference in. Read
+// when one is about to be cancelled: that entry is the log's stock, and un-posting it
+// leaves the log pointing at a cancelled document. Nothing is blocked - the
+// confirmation just says whose stock it is instead of only the docname.
+const CROP_LOG_STOCK_REFERENCES = [
+	["Harvest Log", "stock_entry_reference_hl"],
+	["Spraying Log", "stock_entry_reference_spl"],
+	["Sowing Log", "stock_entry_reference_sl"],
+	["Fertigation Log", "stock_entry_reference_fl"],
+];
+
+// ERPNext's setup masters, grouped the way its own Settings pages group them:
+// the company first, then what is bought and stocked, then who it is bought from
+// and sold to, then how it is priced and paid for. Order here is the sidebar order.
+const SETUP_KINDS = ["company",
+	"item", "item-group", "warehouse", "uom", "brand",
+	"supplier", "supplier-group", "customer", "customer-group",
+	"price-list", "item-price", "mode-of-payment", "address", "account", "cost-center"];
+
+// The four the sidebar actually lists, in this order. The others above stay carried by
+// the workspace - their lists and forms still exist and still answer a Link click - they
+// are simply not offered as a menu entry, the same way the old till button is kept.
+// Account sits beside Cost Center: the two masters every posting reaches for.
+const SETUP_NAV_KINDS = ["item", "warehouse", "supplier", "customer", "address",
+	"account", "cost-center"];
+
 // Documents this workspace only ever reads. A Stock Entry is posted by a crop log, so
 // the form must not offer Save, Submit or Cancel - cancelling one would unpost stock.
 // Written by ERPNext itself, so this workspace shows them and never edits them
-const READ_ONLY_KINDS = ["stock-entry", "pos-invoice-merge-log"];
+const READ_ONLY_KINDS = ["pos-invoice", "pos-invoice-merge-log"];
+
+// Cancel is the exception to that. The desk offers it on a POS Invoice and ERPNext
+// refuses one that has already been consolidated, so the rule stays its own. A Stock
+// Entry is deliberately left out - cancelling it would unpost the stock a crop log put
+// there - and so is a merge log, which would unconsolidate a day of sales.
+const CANCELLABLE_READ_ONLY_KINDS = ["pos-invoice"];
 const POS_PAGE_METHOD = "erpnext.selling.page.point_of_sale.point_of_sale";
 
 // Tiles under the KPI cards. Every one opens a list this workspace actually has - a
@@ -173,6 +307,14 @@ const KPI_SHORTCUTS = [
 	{ report: "attendance", label: "Attendance", icon: "users" },
 	{ report: "production", label: "Production", icon: "crop" },
 	{ report: "sales", label: "Sales", icon: "money-coins-1" },
+	{ report: "fuel-stock", label: "Fuel Stock", icon: "stock" },
+	{ report: "fuel-issue", label: "Fuel Distribution", icon: "tool" },
+	// `desk` opens ERPNext's own report on the desk. These three are the accounts
+	// team's, with filters and drilldowns this workspace has no version of, so they
+	// are handed over whole rather than half-rebuilt.
+	{ desk: "General Ledger", label: "General Ledger", icon: "money-coins-1" },
+	{ desk: "Stock Ledger", label: "Stock Ledger", icon: "stock" },
+	{ desk: "Trial Balance", label: "Trial Balance", icon: "list" },
 ];
 
 // each report the tiles can reach, so a tile never points at something unbuilt
@@ -180,6 +322,87 @@ const REPORT_VIEWS = {
 	attendance: "loadAttendanceReport",
 	production: "loadProductionReport",
 	sales: "loadSalesReport",
+	"fuel-stock": "loadFuelStockReport",
+	"fuel-issue": "loadFuelIssueReport",
+	"general-ledger": "loadGeneralLedger",
+	"stock-ledger": "loadStockLedger",
+};
+
+// Bookmarkable entry points for the report views above (plus the KPI board itself) - lets
+// a Dux Portal tile link straight to one of these the same way it links to a doctype kind.
+// Views that are reached by a URL segment rather than by a document kind, so a Dux
+// Portal tile can link straight to one. openInitialRoute checks this before it looks
+// for a kind, and syncRoute puts the address back to the plain portal URL afterwards.
+const VIEW_ROUTES = {
+	report: "loadKpiDashboard",
+	"attendance-report": "loadAttendanceReport",
+	"production-report": "loadProductionReport",
+	"sales-report": "loadSalesReport",
+	"fuel-stock-report": "loadFuelStockReport",
+	"fuel-distribution-report": "loadFuelIssueReport",
+	"general-ledger": "loadGeneralLedger",
+	"stock-ledger": "loadStockLedger",
+	// the till: a shift has to be open, and openPosCheckoutLanding is what asks for one
+	"point-of-sale": "openPosCheckoutLanding",
+};
+
+// The two fuel dashboards differ only in what they filter by, what they add up and
+// what they call. One implementation reads both from here.
+const FUEL_REPORTS = {
+	"fuel-stock": {
+		title: "Fuel Stock Dashboard",
+		method: "fuel_stock_report",
+		load: "fuelStockReport",
+		chart: "Fuel Purchased Daily",
+		// the columns that carry money, so the screen formats them as the exports do
+		money: ["rate", "amount"],
+		totals: [{ key: "quantity", label: "Total Quantity (Ltr)" },
+			{ key: "amount", label: "Total Amount", money: true }],
+		filters: [
+			{ key: "item", label: "Fuel Type", doctype: "Item", empty: "All Fuels", query: { item_group: "Fuel" } },
+			{ key: "warehouse", label: "Warehouse", doctype: "Warehouse", empty: "All Warehouses" },
+			{ key: "vendor", label: "Supplier", doctype: "Supplier", empty: "All Suppliers" },
+		],
+		empty: "Nothing was bought between {0} and {1} for these filters.",
+		emptyTitle: "No fuel purchases here.",
+	},
+	"fuel-issue": {
+		title: "Fuel Distribution Dashboard",
+		method: "fuel_issue_report",
+		load: "fuelIssueReport",
+		chart: "Fuel Issued Daily",
+		money: [],
+		totals: [{ key: "run", label: "Total Run (KM)" },
+			{ key: "quantity", label: "Total Issued (Ltr)" }],
+		filters: [
+			{ key: "item", label: "Fuel Type", doctype: "Item", empty: "All Fuels", query: { item_group: "Fuel" } },
+			{ key: "warehouse", label: "Warehouse", doctype: "Warehouse", empty: "All Warehouses" },
+			{ key: "vehicle", label: "Vehicle", doctype: "Vehicle Details", empty: "All Vehicles" },
+		],
+		empty: "Nothing was issued between {0} and {1} for these filters.",
+		emptyTitle: "No fuel issues here.",
+	},
+};
+
+// ERPNext's own General Ledger and Stock Ledger, drawn here instead of on the desk.
+// The columns come from the report itself - whatever it returns is what is shown - so
+// only the filters worth offering are named here. Company and the period are common to
+// both and are added to every request.
+const LEDGER_REPORTS = {
+	"general-ledger": {
+		title: "General Ledger",
+		filters: [
+			{ key: "account", label: "Account", doctype: "Account", empty: "All Accounts" },
+			{ key: "voucher_no", label: "Voucher No", empty: "Any Voucher" },
+		],
+	},
+	"stock-ledger": {
+		title: "Stock Ledger",
+		filters: [
+			{ key: "item_code", label: "Item", doctype: "Item", empty: "All Items" },
+			{ key: "warehouse", label: "Warehouse", doctype: "Warehouse", empty: "All Warehouses" },
+		],
+	},
 };
 
 // how many rows a report shows at a time
@@ -192,11 +415,25 @@ const REPORT_PAGE_SIZES = [10, 25, 50, 100];
 // barely visible, so it stays solid.
 // The dashboard is the count cards only. Flip this back on to return the Recent Activity
 // and Pending Approvals tables; the markup and the queries behind them are untouched.
+// Counted, but not given a card of their own: most Stock Entries here are posted by a
+// crop log, and a Merge Log is written by the till - neither is a
+// number anyone opens this page to see. They stay in Recent Activity, and in the kinds
+// the dashboard totals, so nothing else about the page changes.
+const DASHBOARD_HIDE_CARDS = ["stock-entry", "pos-invoice-merge-log"];
+
 const DASHBOARD_TABLES = false;
 
 const CHART_BAR_COLOR = "#ded9fb";
 const CHART_LINE_COLOR = "#7b68ee";
-const POS_PROFILE_QUERY = "erpnext.accounts.doctype.pos_profile.pos_profile.pos_profile_query";
+// ERPNext's own query hides every profile an administrator is not named on; this one
+// keeps that rule for cashiers and lifts it for a System Manager. See portal_extras.
+const POS_PROFILE_QUERY = "agriventure.portal_extras.pos_profiles_for_company";
+// The till itself: item search/pricing/stock come straight from ERPNext's own stock POS
+// screen's whitelisted methods (same ones erpnext.public.js.point-of-sale calls), so pricing,
+// tax and stock rules never drift from what the desk POS would compute for the same profile.
+const POS_INVOICE_METHOD = "erpnext.accounts.doctype.pos_invoice.pos_invoice";
+// items[].item_code missing per row is fine - `get_items` returns whatever it has
+const POS_ITEM_PAGE_SIZE = 20;
 
 // Each crop log reads the day's Shift Details for its own activity, so only the field
 // names and that activity differ. crop_ops.py serves all of them.
@@ -208,7 +445,8 @@ const CROP_LOG_CONFIG = {
 	"fertigation-log": { activity: "Fertigation", label: "Fertigation", date: "date_fl", centre: "centre__location_fl", field: "name_of_field_fl" },
 };
 
-const NON_SUBMITTABLE_KINDS = [...MASTER_KINDS, ...ATTENDANCE_KINDS, ...CROP_KINDS, ...POS_CONFIG_KINDS];
+const NON_SUBMITTABLE_KINDS = [...MASTER_KINDS, ...ATTENDANCE_KINDS, ...CROP_KINDS, ...POS_CONFIG_KINDS,
+	...SETUP_KINDS, ...TRANSPORT_KINDS];
 
 // Read-only Link fields pointing at a document this workspace also shows, so the value
 // opens here instead of on the desk. Fields whose target has no page here (a Sales
@@ -256,8 +494,15 @@ const PORTAL_SKIP_CHILD_FIELDS = {
 
 // Attendance runs the same face-check flow as the desk form, against the same endpoints.
 const ATTENDANCE_KIND = "attendance-log";
-const ATTENDANCE_METHOD = "agriventure.agriventure.doctype.attendance_log.attendance_log";
-const SHIFT_METHOD = "agriventure.agriventure.doctype.shift_details.shift_details";
+// The attendance and shift logic belongs to this site's own app, which has run it for
+// 6,982 logs. The portal calls that code rather than shipping a second copy - same
+// face matching, same timings, same results as the desk form beside it.
+const ATTENDANCE_METHOD = "agriventure_nagpur_erp.agriventure_nagpur_erp.doctype.attendance_log.attendance_log";
+const SAVE_LOGIN_PHOTO = false;
+// The list's Face Attendance screen replaced the pick-then-scan flow on the form.
+// Set this to false to put the old camera-on-person-select back, unchanged.
+const FACE_ATTENDANCE_ONLY = true;
+const SHIFT_METHOD = "agriventure_nagpur_erp.agriventure_nagpur_erp.doctype.shift_details.shift_details";
 
 // the one or two fields worth filtering a master list by, beyond ID and its title field
 // Where the standard ID / Title / Company / Status / Purpose set is not what a list
@@ -287,10 +532,17 @@ const LIST_COLUMN_LABELS = {
 	// two states, and they mean different things: the approval trail, and how far the
 	// request has been ordered and received
 	"material-request": { workflow_state: "Status", status: "PO Status", title: "Title" },
+	"purchase-order": { pr_status: "PR Status" },
+	// Paid here means the bill carries no outstanding, whatever mode settled it - so
+	// the two money columns sit side by side rather than the status speaking alone
+	"pos-invoice": { grand_total: "Total", paid_amount: "Paid", outstanding_amount: "Outstanding" },
 	// the field records the exception, the column reads as the state
 	"pos-profile": { disabled: "Status" },
 	"pos-opening-entry": { period_start_date: "Period Start Date", period_end_date: "Period End Date" },
 	"pos-closing-entry": { period_start_date: "Period Start Date", period_end_date: "Period End Date" },
+	// each person paired with the task they were put on, joined from the shift's own
+	// labour table; the Name of Person and Task Name filters still search it
+	"shift-details": { assignments: "Assignment" },
 	"harvest-log": {
 		date_hl: "Date",
 		centre__location_hl: "Centre / Location",
@@ -317,6 +569,27 @@ const LIST_COLUMN_LABELS = {
 	},
 };
 
+// ERPNext's own client controllers never run in this workspace - they need a real frm -
+// so the plain field-to-field rules a form actually depends on are restated here, each
+// against the line of ERPNext that defines it. Only "fill while still empty" rules
+// belong here: anything that recalculates totals already goes through the server's
+// recalculate, and anything metadata already describes is handled by fetch_from below.
+//
+//   kind: { sourceFieldname: [targetFieldname, ...] }
+const DERIVED_FIELDS = {
+	// erpnext/stock/doctype/item/item.js:282 - the Item Code stands in as the name until
+	// one is typed. The server agrees on save (item.py:185), so this only means the field
+	// stops sitting blank while the form is still open.
+	"item": { item_code: ["item_name"] },
+};
+
+// Which column carries the link into the form. `name` unless the list does not show
+// it - a Supplier list shows the supplier's name instead, and that is what should be
+// clickable rather than nothing at all.
+const LIST_LINK_COLUMN = {
+	supplier: "supplier_name",
+};
+
 const LIST_FILTERS = {
 	"field-details": [["id", "ID", "name"], ["field", "Name of Field", "name_of_field"],
 		["centre", "Centre / Location", "centre__location_fd"]],
@@ -328,20 +601,45 @@ const LIST_FILTERS = {
 	"centre-location-details": [["id", "ID", "name"], ["centre", "Centre & Location", "name_of_centrelocation"]],
 	"category-details": [["id", "ID", "name"], ["activity", "Activity", "agricultural_activity"]],
 	"material-request": [["id", "ID", "name"], ["company", "Company", "company"], ["status", "Status", "status"]],
+	// the setup masters with enough rows to need narrowing down
+	"item": [["id", "Item Code", "name"], ["itemname", "Item Name", "item_name"],
+		["group", "Item Group", "item_group"]],
+	"item-price": [["item", "Item Code", "item_code"], ["pricelist", "Price List", "price_list"]],
+	"customer": [["id", "ID", "name"], ["name", "Customer Name", "customer_name"],
+		["group", "Customer Group", "customer_group"]],
+	"supplier": [["id", "ID", "name"], ["name", "Supplier Name", "supplier_name"],
+		["group", "Supplier Group", "supplier_group"]],
+	"warehouse": [["id", "ID", "name"], ["company", "Company", "company"]],
+	"address": [["id", "ID", "name"], ["type", "Address Type", "address_type"],
+		["city", "City", "city"], ["country", "Country", "country"]],
+	"account": [["id", "ID", "name"], ["parent", "Parent Account", "parent_account"],
+		["root", "Root Type", "root_type"]],
+	"cost-center": [["id", "ID", "name"], ["centre", "Cost Center", "cost_center_name"],
+		["company", "Company", "company"]],
+	"uom": [["id", "UOM", "name"]],
+	"pos-invoice": [["id", "ID", "name"], ["customer", "Customer", "customer"],
+		["status", "Status", "status"], ["profile", "POS Profile", "pos_profile"]],
 	"purchase-order": [["id", "ID", "name"], ["supplier", "Supplier", "supplier"],
 		["status", "Status", "status"]],
 	"purchase-receipt": [["id", "ID", "name"], ["supplier", "Supplier", "supplier"], ["company", "Company", "company"],
 		["status", "Status", "status"]],
 	"purchase-invoice": [["id", "ID", "name"], ["supplier", "Supplier", "supplier"], ["company", "Company", "company"],
 		["status", "Status", "status"]],
+	"payment-request": [["id", "ID", "name"], ["party", "Party", "party"],
+		["reference", "Reference Name", "reference_name"], ["status", "Status", "status"]],
+	"journal-entry": [["id", "ID", "name"], ["type", "Entry Type", "voucher_type"],
+		["reference", "Reference Number", "cheque_no"]],
 	"payment-entry": [["id", "ID", "name"], ["paymenttype", "Payment Type", "payment_type"],
 		["partytype", "Party Type", "party_type"], ["party", "Party", "party"]],
 	"attendance-log": [["id", "ID", "name"], ["person", "Person", "name_of_person_al"],
 		["centre", "Centre / Location", "centre__location_al"], ["loginstatus", "Login Status", "login_status_al"]],
 	// the centre already stands in for the title here, so there is nothing left for one
-	"shift-details": [["id", "ID", "name"], ["centre", "Centre / Location", "centre__location_sd"]],
-	// the title filter was the entry type, which Purpose already is, and this list only
-	// ever shows Material Receipts anyway
+	"shift-details": [["id", "ID", "name"], ["centre", "Centre / Location", "centre__location_sd"],
+		// the labour table, filtered the way the crop logs filter theirs
+		["person", "Name of Person", "assignment_task.name_of_person_lal"],
+		["task", "Task Name", "assignment_task.task_name_lal"]],
+	// the title filter was the entry type, which Purpose already is - and now that the
+	// list is no longer pinned to receipts, that is the filter that separates them
 	"stock-entry": [["id", "ID", "name"], ["company", "Company", "company"], ["purpose", "Purpose", "purpose"]],
 	// the title filter here was already the warehouse, so it only needed saying so
 	"pos-profile": [["id", "ID", "name"], ["warehouse", "Warehouse", "warehouse"], ["company", "Company", "company"]],
@@ -390,6 +688,7 @@ class AgriventureApi {
 	list(args) { return this.call("list_documents", args); }
 	statusOptions(kind) { return this.call("list_status_options", { kind }); }
 	connections(kind, name) { return this.call("document_connections", { kind, name }); }
+	quotationsForRequests(names) { return this.call("quotations_for_requests", { material_requests: JSON.stringify(names) }); }
 	amend(kind, name) { return this.call("amend_document", { kind, name }); }
 	get(kind, name) { return this.call("get_document", { kind, name }); }
 	meta(kind) { return this.call("get_meta", { kind }); }
@@ -405,6 +704,9 @@ class AgriventureApi {
 	attendanceReport(args) { return this.call("attendance_report", args); }
 	productionReport(args) { return this.call("production_report", args); }
 	salesReport(args) { return this.call("sales_report", args); }
+	fuelStockReport(args) { return this.call("fuel_stock_report", args); }
+	fuelIssueReport(args) { return this.call("fuel_issue_report", args); }
+	deskReport(key, filters) { return this.call("desk_report", { key, filters: JSON.stringify(filters) }); }
 	attachFiles(kind, name, files) { return this.call("attach_files", { kind, name, files: JSON.stringify(files) }); }
 	createTarget(kind, name, label) { return this.call("make_create_target", { kind, name, label }); }
 	mapped(sourceKind, sourceName, targetKind, args) { return this.call("make_mapped_document", { source_kind: sourceKind, source_name: sourceName, target_kind: targetKind, args: args ? JSON.stringify(args) : null }); }
@@ -422,21 +724,44 @@ class AgriventurePortal {
 			"purchase-receipt": { title: "Purchase Receipt", badge: "PR", icon: "stock", summary: "Purchase Receipts" },
 			"purchase-invoice": { title: "Purchase Invoice", badge: "PI", icon: "accounting", summary: "Purchase Invoices" },
 			"payment-entry": { title: "Payment Entry", badge: "PE", icon: "money-coins-1", summary: "Payment Entries" },
+			"payment-request": { title: "Payment Request", badge: "PRQ", icon: "money-coins-1", summary: "Payment Requests" },
+			"journal-entry": { title: "Journal Entry", badge: "JE", icon: "small-file", summary: "Journal Entries" },
 			"field-details": { title: "Field Details", badge: "FD", icon: "crop", summary: "Field Details" },
 			"labour-details": { title: "Labour Details", badge: "LD", icon: "users", summary: "Labour Details" },
 			"supervisor-details": { title: "Supervisor Details", badge: "SD", icon: "assign", summary: "Supervisor Details" },
 			"centre-location-details": { title: "Centre and Location Details", badge: "CL", icon: "map", summary: "Centre and Location Details" },
 			"category-details": { title: "Category Details", badge: "CD", icon: "tag", summary: "Category Details" },
 			"attendance-log": { title: "Attendance Log", badge: "AL", icon: "calendar", summary: "Attendance Logs" },
-			"shift-details": { title: "Shift Details", badge: "SD", icon: "list-alt", summary: "Shift Details" },
+			"shift-details": { title: "Shift Details", badge: "SD", icon: "list", summary: "Shift Details" },
 			"harvest-log": { title: "Harvest Log", badge: "HL", icon: "crop", summary: "Harvest Logs" },
 			"spraying-log": { title: "Spraying Log", badge: "SP", icon: "tool", summary: "Spraying Logs" },
 			"sowing-log": { title: "Sowing Log", badge: "SW", icon: "milestone", summary: "Sowing Logs" },
 			"fertigation-log": { title: "Fertigation Log", badge: "FL", icon: "filter", summary: "Fertigation Logs" },
-			"stock-entry": { title: "Material Receipt", badge: "MR", icon: "stock", summary: "Material Receipts" },
+			"stock-entry": { title: "Stock Entry", badge: "SE", icon: "stock", summary: "Stock Entries" },
+			"fuel-for-stock": { title: "Fuel for Stock", badge: "FS", icon: "stock", summary: "Fuel for Stock" },
+			"fuel-for-distribution": { title: "Fuel for Distribution", badge: "FD", icon: "tool", summary: "Fuel for Distribution" },
+			"vehicle-details": { title: "Vehicle Details", badge: "VD", icon: "list", summary: "Vehicle Details" },
 			"pos-profile": { title: "POS Profile", badge: "PP", icon: "setting-gear", summary: "POS Profiles" },
-			"pos-opening-entry": { title: "POS Opening Entry", badge: "PO", icon: "unlock", summary: "POS Opening Entries" },
-			"pos-closing-entry": { title: "POS Closing Entry", badge: "PC", icon: "lock", summary: "POS Closing Entries" },
+			"pos-opening-entry": { title: "POS Opening Entry", badge: "PO", icon: "today", summary: "POS Opening Entries" },
+			"pos-closing-entry": { title: "POS Closing Entry", badge: "PC", icon: "check", summary: "POS Closing Entries" },
+			"pos-invoice": { title: "POS Invoice", badge: "PSI", icon: "retail", summary: "POS Invoices" },
+			// ---- Setup masters, shown under SETTINGS in the sidebar ----
+			"company": { title: "Company", badge: "CO", icon: "organization", summary: "Companies" },
+			"item": { title: "Item", badge: "IT", icon: "stock", summary: "Items" },
+			"item-group": { title: "Item Group", badge: "IG", icon: "tag", summary: "Item Groups" },
+			"warehouse": { title: "Warehouse", badge: "WH", icon: "branch", summary: "Warehouses" },
+			"uom": { title: "UOM", badge: "UM", icon: "quantity-1", summary: "UOMs" },
+			"brand": { title: "Brand", badge: "BR", icon: "sell", summary: "Brands" },
+			"supplier": { title: "Supplier", badge: "SU", icon: "buying", summary: "Suppliers" },
+			"supplier-group": { title: "Supplier Group", badge: "SG", icon: "users", summary: "Supplier Groups" },
+			"customer": { title: "Customer", badge: "CU", icon: "customer", summary: "Customers" },
+			"customer-group": { title: "Customer Group", badge: "CG", icon: "share-people", summary: "Customer Groups" },
+			"price-list": { title: "Price List", badge: "PL", icon: "list", summary: "Price Lists" },
+			"item-price": { title: "Item Price", badge: "IP", icon: "money-coins-1", summary: "Item Prices" },
+			"mode-of-payment": { title: "Mode of Payment", badge: "MP", icon: "card", summary: "Modes of Payment" },
+			"address": { title: "Address", badge: "AD", icon: "map", summary: "Addresses" },
+			"account": { title: "Account", badge: "AC", icon: "money-coins-1", summary: "Accounts" },
+			"cost-center": { title: "Cost Center", badge: "CC", icon: "expenses", summary: "Cost Centers" },
 			"pos-invoice-merge-log": { title: "POS Invoice Merge Log", badge: "ML", icon: "small-file", summary: "POS Invoice Merge Logs" },
 		};
 		// state.view is written straight in a few places as well as through setActive, so the
@@ -471,7 +796,7 @@ class AgriventurePortal {
 	}
 
 	ensureStyles() {
-		const href = "/assets/agriventure/css/agriventure.css?v=20260904-gpssoft-215";
+		const href = "/assets/agriventure/css/agriventure.css?v=perms30c";
 		let link = document.getElementById("agriventure-live-styles");
 		if (!link) {
 			link = document.createElement("link");
@@ -512,19 +837,57 @@ class AgriventurePortal {
 			}
 			this.boot.fiscal_year = this.boot.fiscal_year || frappe.sys_defaults?.fiscal_year || frappe.boot?.sysdefaults?.fiscal_year || this.currentFiscalYear();
 			this.renderShell();
-			await this.loadDashboard();
+			await this.openInitialRoute();
 		} catch (error) {
 			this.renderFatal(error);
 		}
 	}
 
+	// A shortcut/bookmark can point straight at a kind - and optionally a specific document -
+	// via extra segments after the page name, e.g. /app/agriventure-portal/purchase-order or
+	// .../purchase-order/PO-2026-00001. Read once here, on first load only; internal
+	// navigation from here on never touches the URL (see the history-guard note up top), so
+	// nothing else in the app needs to know or care that it was opened this way.
+	async openInitialRoute() {
+		// every path in here needs the boot - the kinds it checks against live on it
+		if (!this.boot) return;
+		this.lastRouteStr = frappe.get_route_str ? frappe.get_route_str() : "";
+		const route = frappe.get_route ? frappe.get_route() : [];
+		const kind = route[1];
+		if (kind && VIEW_ROUTES[kind]) {
+			this.backGuard = true;
+			this.deepLinkEntry = true;
+			await this[VIEW_ROUTES[kind]]();
+			return;
+		}
+		if (kind && this.config[kind]) {
+			this.state.kind = kind;
+			if (route[2]) {
+				await this.openForm(route[2]);
+			} else {
+				// A real browser entry (e.g. a Dux Portal tile linking straight to this kind's
+				// list) already put a distinct entry in history - that already covers what the
+				// guard below exists for, so skip pushing another one, and let the first Back
+				// press here exit to wherever the user actually came from instead of bouncing
+				// through this portal's own dashboard first.
+				this.backGuard = true;
+				this.deepLinkEntry = true;
+				await this.loadList();
+			}
+			return;
+		}
+		await this.loadDashboard();
+	}
+
 	renderShell() {
 		const navFor = (keys) => keys.map((key) => `
-			<button class="ag-nav" type="button" data-kind="${key}">
+			<button class="ag-nav" type="button" data-kind="${key}" title="${this.escape(this.config[key].title)}">
 				<span class="ag-doc-icon">${this.icon(this.config[key].icon, "sm")}</span><span>${this.config[key].title}</span>
 			</button>`).join("");
 		const keys = Object.keys(this.config);
-		const grouped = [...MASTER_KINDS, ...ATTENDANCE_KINDS, ...CROP_KINDS, ...POS_KINDS, ...STOCK_KINDS];
+		const grouped = [...MASTER_KINDS, ...ATTENDANCE_KINDS, ...CROP_KINDS, ...POS_KINDS, ...STOCK_KINDS,
+			...TRANSPORT_KINDS,
+			...SETUP_KINDS];
 		const nav = navFor(keys.filter((key) => !grouped.includes(key)));
 		// a group is listed in the order its own array gives, and skips anything the server
 		// did not advertise - so moving an entry is a matter of moving it in that array
@@ -532,36 +895,50 @@ class AgriventurePortal {
 		const masterNav = groupNav(MASTER_KINDS);
 		const attendanceNav = groupNav(ATTENDANCE_KINDS);
 		const cropNav = groupNav(CROP_KINDS);
+		// Hidden from the sidebar per request 2026-09-05 (kept, not deleted - data-action=open-pos
+		// below still binds it in bindShellEvents, so it still works if ever re-added to posNav).
 		const tillButton = `<button class="ag-nav" type="button" data-action="open-pos"><span class="ag-doc-icon">${this.icon("retail", "sm")}</span><span>Point of Sale</span></button>`;
+		// The new custom checkout is now the only "Point of Sale" entry shown in the sidebar -
+		// labelled plainly since it's no longer sitting next to the old one.
+		const tillButtonNew = `<button class="ag-nav" type="button" data-action="open-pos-new"><span class="ag-doc-icon">${this.icon("retail", "sm")}</span><span>Point of Sale</span></button>`;
 		const posKeys = POS_KINDS.filter((key) => this.config[key]);
 		const afterKey = posKeys.includes("pos-profile") ? "pos-profile" : posKeys[posKeys.length - 1];
 		const posNav = posKeys.length
-			? posKeys.map((key) => navFor([key]) + (key === afterKey ? tillButton : "")).join("")
-			: tillButton;
+			? posKeys.map((key) => navFor([key]) + (key === afterKey ? tillButtonNew : "")).join("")
+			: tillButtonNew;
 		const stockNav = groupNav(STOCK_KINDS);
-		this.wrapper.html(`<div class="agriventure-app">
+		const transportNav = groupNav(TRANSPORT_KINDS);
+		const setupNav = groupNav(SETUP_NAV_KINDS);
+		this.wrapper.html(`<div class="agriventure-app ag-setup-collapsed">
 			<div class="ag-mobile-backdrop" data-action="close-menu"></div>
 			<aside class="ag-sidebar">
-				<a class="ag-brand" href="/app"><strong>Agriventure</strong><small>WORK</small></a>
-				<div class="ag-menu-search"><span>${this.icon("search", "xs")}</span><input aria-label="Search menu" placeholder="Search menu…"></div>
+				<a class="ag-brand${this.boot.brand_logo ? " ag-brand-logo" : ""}" href="${BRAND_HOME}">${this.boot.brand_logo
+					? `<img src="${this.escape(this.boot.brand_logo)}" alt="Agriventure">`
+					: `<strong>Agriventure</strong><small>WORK</small>`}</a>
+				<div class="ag-menu-search"><span>${this.icon("search", "xs")}</span><input aria-label="Search menu" placeholder="Search menu…"><kbd class="ag-kbd">Ctrl K</kbd></div>
 				<nav>
 					<button class="ag-nav ag-dashboard-nav active" type="button" data-view="dashboard"><span class="ag-doc-icon">${this.icon("dashboard", "sm")}</span><span>Dashboard</span></button>
 					<button class="ag-nav-heading" type="button" data-action="toggle-transactions" aria-expanded="true"><span>TRANSACTIONS</span>${this.icon("down", "xs")}</button>
 					<div class="ag-transaction-list">${nav}</div>
-					<button class="ag-nav-heading" type="button" data-action="toggle-masters" aria-expanded="true"><span>MASTER SETTING</span>${this.icon("down", "xs")}</button>
-					<div class="ag-master-list">${masterNav}</div>
 					<button class="ag-nav-heading" type="button" data-action="toggle-attendance" aria-expanded="true"><span>ATTENDANCE</span>${this.icon("down", "xs")}</button>
 					<div class="ag-attendance-list">${attendanceNav}</div>
-					<button class="ag-nav-heading" type="button" data-action="toggle-crop" aria-expanded="true"><span>CROP OPERATIONS</span>${this.icon("down", "xs")}</button>
-					<div class="ag-crop-list">${cropNav}</div>
-					<button class="ag-nav-heading" type="button" data-action="toggle-stock" aria-expanded="true"><span>STOCK</span>${this.icon("down", "xs")}</button>
-					<div class="ag-stock-list">${stockNav}</div>
 					<button class="ag-nav-heading" type="button" data-action="toggle-pos" aria-expanded="true"><span>POINT OF SALE</span>${this.icon("down", "xs")}</button>
 					<div class="ag-pos-list">${posNav}</div>
+					<button class="ag-nav-heading" type="button" data-action="toggle-crop" aria-expanded="true"><span>CROP OPERATIONS</span>${this.icon("down", "xs")}</button>
+					<div class="ag-crop-list">${cropNav}</div>
 					<div class="ag-reports-list">
 						<button class="ag-nav-heading ag-nav-heading-link" type="button" data-action="open-kpi"><span>REPORT</span></button>
 					</div>
+					<button class="ag-nav-heading" type="button" data-action="toggle-stock" aria-expanded="true"><span>STOCK</span>${this.icon("down", "xs")}</button>
+					<div class="ag-stock-list">${stockNav}</div>
+					<button class="ag-nav-heading" type="button" data-action="toggle-transport" aria-expanded="true"><span>TRANSPORT</span>${this.icon("down", "xs")}</button>
+					<div class="ag-transport-list">${transportNav}</div>
+					<button class="ag-nav-heading" type="button" data-action="toggle-masters" aria-expanded="true"><span>MASTER SETTING</span>${this.icon("down", "xs")}</button>
+					<div class="ag-master-list">${masterNav}</div>
+					<button class="ag-nav-heading" type="button" data-action="toggle-setup" aria-expanded="false"><span>SETTINGS</span>${this.icon("down", "xs")}</button>
+					<div class="ag-setup-list">${setupNav}</div>
 				</nav>
+				<button class="ag-collapse-toggle" type="button" data-action="toggle-rail"><span class="ag-collapse-icon">${this.icon("sidebar-collapse", "sm")}</span><span>${__("Collapse")}</span></button>
 				<div class="ag-user">
 					${this.avatar(this.boot.user.full_name)}
 					<div class="ag-user-copy"><b>${this.escape(this.boot.user.full_name)}</b><small>${this.escape(this.boot.user.name)}</small></div>
@@ -582,12 +959,69 @@ class AgriventurePortal {
 				<section class="ag-content"></section>
 			</main>
 		</div>`);
+		// restored before the first paint the user sees, so the rail never flashes open
+		try {
+			if (window.localStorage.getItem(RAIL_KEY) === "1") this.wrapper.find(".agriventure-app").addClass("ag-rail");
+		} catch (error) { /* private window */ }
 		this.bindShellEvents();
+		this.bindLinkRedirects();
+	}
+
+	// Which portal kind, if any, owns a given DocType. Built once from what the server
+	// actually advertised, so a kind whose name differs from its DocType (category-details
+	// -> Category Master) is matched just as reliably as one where they agree. Both the
+	// DocType name and its route slug are registered, since a Link's href carries the slug
+	// while a read-only Link's data-doctype carries the name.
+	kindForDoctype(doctype) {
+		if (!this.boot || !this.boot.doctypes) return null;
+		if (!this.doctypeKinds) {
+			this.doctypeKinds = new Map();
+			Object.keys(this.boot.doctypes).forEach((kind) => {
+				const name = this.boot.doctypes[kind] && this.boot.doctypes[kind].doctype;
+				if (!name || !this.config[kind]) return;
+				const plain = String(name).toLowerCase();
+				this.doctypeKinds.set(plain, kind);
+				this.doctypeKinds.set(plain.replace(/ /g, "-"), kind);
+			});
+		}
+		return this.doctypeKinds.get(String(doctype || "").toLowerCase()) || null;
+	}
+
+	bindLinkRedirects() {
+		// its own namespace, so bindShellEvents' off(".agriventure") never drops it
+		this.wrapper.off(".aglink").on("click.aglink", "a[href^='/app/']", (event) => {
+			const anchor = $(event.currentTarget);
+			// the brand goes to Dux Portal on purpose, and a report's links open a new tab
+			if (anchor.is(".ag-brand, .ag-rep-link") || anchor.attr("target")) return;
+			// a modified click means "new tab" - that belongs to the browser, not to us
+			if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+			let doctype = anchor.attr("data-doctype");
+			let name = anchor.attr("data-name");
+			if (!doctype || !name) {
+				// the editable control's open arrow carries only an href
+				const parts = String(anchor.attr("href") || "").split("?")[0].split("/").filter(Boolean);
+				if (parts[0] !== "app" || parts.length < 3) return;
+				doctype = decodeURIComponent(parts[1]);
+				name = decodeURIComponent(parts.slice(2).join("/"));
+			}
+			const kind = this.kindForDoctype(doctype);
+			if (!kind) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.state.kind = kind;
+			this.state.start = 0;
+			this.openForm(String(name));
+		});
 	}
 
 	bindShellEvents() {
 		this.wrapper.off(".agriventure");
-		this.wrapper.on("click.agriventure", "[data-view=dashboard]", () => this.loadDashboard());
+		this.wrapper.on("click.agriventure", "[data-view=dashboard]", (event) => {
+			// the brand is an anchor so it can still be opened in a new tab; a plain click
+			// belongs to the portal, not to the browser
+			event.preventDefault();
+			this.loadDashboard();
+		});
 		this.wrapper.on("click.agriventure", ".ag-nav[data-kind]", (event) => {
 			this.state.kind = $(event.currentTarget).data("kind");
 			this.state.start = 0;
@@ -600,6 +1034,7 @@ class AgriventurePortal {
 		});
 		this.wrapper.on("click.agriventure", "[data-action=theme]", () => this.wrapper.find(".agriventure-app").toggleClass("ag-dark"));
 		this.wrapper.on("click.agriventure", "[data-action=open-pos]", () => this.openPointOfSale());
+		this.wrapper.on("click.agriventure", "[data-action=open-pos-new]", () => this.openPosCheckoutLanding());
 		this.wrapper.on("click.agriventure", "[data-action=open-kpi]", () => this.loadKpiDashboard());
 		// the reports are reached from the board, so each one offers the way back
 		this.wrapper.on("click.agriventure", ".ag-rep-back", () => this.loadKpiDashboard());
@@ -607,6 +1042,16 @@ class AgriventurePortal {
 			const app = this.wrapper.find(".agriventure-app");
 			app.toggleClass("ag-pos-collapsed");
 			$(event.currentTarget).attr("aria-expanded", String(!app.hasClass("ag-pos-collapsed")));
+		});
+		this.wrapper.on("click.agriventure", "[data-action=toggle-setup]", (event) => {
+			const app = this.wrapper.find(".agriventure-app");
+			app.toggleClass("ag-setup-collapsed");
+			$(event.currentTarget).attr("aria-expanded", String(!app.hasClass("ag-setup-collapsed")));
+		});
+		this.wrapper.on("click.agriventure", "[data-action=toggle-transport]", (event) => {
+			const app = this.wrapper.find(".agriventure-app");
+			app.toggleClass("ag-transport-collapsed");
+			$(event.currentTarget).attr("aria-expanded", String(!app.hasClass("ag-transport-collapsed")));
 		});
 		this.wrapper.on("click.agriventure", "[data-action=toggle-stock]", (event) => {
 			const app = this.wrapper.find(".agriventure-app");
@@ -633,12 +1078,29 @@ class AgriventurePortal {
 			app.toggleClass("ag-transactions-collapsed");
 			$(event.currentTarget).attr("aria-expanded", String(!app.hasClass("ag-transactions-collapsed")));
 		});
+		// The rail: the sidebar narrows to its icons and the main area widens with it.
+		// Both read --ag-sidebar, so one variable moves the whole layout; the transition
+		// lives on width and margin-left, which do animate.
+		this.wrapper.on("click.agriventure", "[data-action=toggle-rail]", () => {
+			const app = this.wrapper.find(".agriventure-app");
+			const railed = app.toggleClass("ag-rail").hasClass("ag-rail");
+			try { window.localStorage.setItem(RAIL_KEY, railed ? "1" : "0"); } catch (error) { /* private window */ }
+		});
+		// Ctrl+K / Cmd+K puts the cursor in the menu search, which is what the badge says
+		$(document).off("keydown.agsearch").on("keydown.agsearch", (event) => {
+			if (!(event.ctrlKey || event.metaKey) || String(event.key).toLowerCase() !== "k") return;
+			if (!this.wrapper.find(".agriventure-app").length) return;
+			event.preventDefault();
+			// searching is pointless while the labels are hidden, so the rail opens first
+			this.wrapper.find(".agriventure-app").removeClass("ag-rail");
+			this.wrapper.find(".ag-menu-search input").trigger("focus").trigger("select");
+		});
 		this.wrapper.on("click.agriventure", "[data-action=open-menu]", () => this.wrapper.find(".agriventure-app").addClass("ag-menu-open"));
 		this.wrapper.on("click.agriventure", "[data-action=close-menu]", () => this.wrapper.find(".agriventure-app").removeClass("ag-menu-open"));
 		this.wrapper.on("click.agriventure", "[data-action=logout]", () => this.confirmLogout());
 		this.wrapper.on("input.agriventure", ".ag-menu-search input", (event) => {
 			const query = event.target.value.trim().toLowerCase();
-			this.wrapper.find(".ag-transaction-list .ag-nav,.ag-master-list .ag-nav,.ag-attendance-list .ag-nav,.ag-crop-list .ag-nav,.ag-pos-list .ag-nav,.ag-stock-list .ag-nav,.ag-reports-list .ag-nav-heading-link").each((_, item) => $(item).toggle($(item).text().toLowerCase().includes(query)));
+			this.wrapper.find(".ag-transaction-list .ag-nav,.ag-master-list .ag-nav,.ag-attendance-list .ag-nav,.ag-crop-list .ag-nav,.ag-pos-list .ag-nav,.ag-stock-list .ag-nav,.ag-transport-list .ag-nav,.ag-setup-list .ag-nav,.ag-reports-list .ag-nav-heading-link").each((_, item) => $(item).toggle($(item).text().toLowerCase().includes(query)));
 		});
 	}
 
@@ -653,12 +1115,25 @@ class AgriventurePortal {
 		if (needed === Boolean(this.backGuard)) return;
 		if (needed) {
 			this.backGuard = true;
+			// remembered separately from backGuard, because the flag is also raised for a
+			// deep-link entry where nothing was pushed - see below
+			this.guardPushed = true;
 			history.pushState({ agriventure: true }, "");
+			return;
+		}
+		this.backGuard = false;
+		// Landing straight on a list from Dux Portal raises backGuard without pushing
+		// anything (openInitialRoute says so itself). Spending a history.back() that was
+		// never pushed walks the browser out of this page entirely - which is exactly how
+		// opening Material Request from Dux Portal and then clicking Dashboard ended up
+		// back on Dux Portal. There is nothing to spend here, so nothing is spent.
+		if (!this.guardPushed) {
+			this.deepLinkEntry = false;
 			return;
 		}
 		// back on the dashboard by some other route - the sidebar, say - so the guard is
 		// spent now rather than costing the user a wasted press later
-		this.backGuard = false;
+		this.guardPushed = false;
 		this.skipBack = true;
 		history.back();
 	}
@@ -668,6 +1143,14 @@ class AgriventurePortal {
 		if (this.skipBack) {
 			this.skipBack = false;
 			return true;
+		}
+		if (this.deepLinkEntry) {
+			// First Back press after landing straight on a list view from outside (see
+			// openInitialRoute) - no guard entry was pushed for it, so let the browser
+			// genuinely navigate away instead of redirecting into this portal's dashboard.
+			this.deepLinkEntry = false;
+			this.backGuard = false;
+			return false;
 		}
 		this.backGuard = false;
 		const view = this.state.view;
@@ -690,6 +1173,29 @@ class AgriventurePortal {
 		if (view === "dashboard") this.wrapper.find("[data-view=dashboard]").addClass("active");
 		if (kind) this.wrapper.find(`.ag-nav[data-kind="${kind}"]`).addClass("active");
 		this.wrapper.find(".agriventure-app").removeClass("ag-menu-open");
+		this.syncRoute();
+	}
+
+	syncRoute() {
+		// One address for the whole workspace. A Dux Portal tile may link deeper -
+		// /app/agriventure-portal/purchase-order - and openInitialRoute opens exactly that
+		// view; the moment it has, the extra segments have done their job and the address
+		// bar is put back to the plain portal URL. Leaving them there was what made a
+		// Material Request read .../purchase-invoice: a link that had been spent already.
+		//
+		// replaceState, never push: syncBackGuard owns the history stack and spends a single
+		// guard entry on Back. An entry per click here would fight it.
+		if (!this.boot) return;
+		const path = "/app/" + PORTAL_ROUTE;
+		if (window.location.pathname === path) return;
+		try {
+			history.replaceState(history.state, "", path);
+		} catch (error) {
+			return; // a browser that refuses this is no reason to break the view
+		}
+		// on_page_show compares the route it reads against this; without the update it would
+		// treat the URL we just wrote as somewhere the user asked to go, and navigate again
+		this.lastRouteStr = PORTAL_ROUTE;
 	}
 
 	setCrumb(title) {
@@ -879,7 +1385,9 @@ class AgriventurePortal {
 			const config = this.config[kind];
 			const dateField = this.boot.doctypes[kind].date_field;
 			activeCount += Number(result.count || 0);
-			cards.push({ kind, icon: config.icon, label: config.summary, count: Number(result.count || 0) });
+			if (!DASHBOARD_HIDE_CARDS.includes(kind)) {
+				cards.push({ kind, icon: config.icon, label: config.summary, count: Number(result.count || 0) });
+			}
 			for (const row of result.rows || []) {
 				recent.push({ kind, document: this.config[kind].title, reference: row.name, date: row[dateField], status: row.status || "Draft" });
 			}
@@ -1175,11 +1683,17 @@ class AgriventurePortal {
 		// "this month" default would only hide older rows
 		const isMaster = this.boot.doctypes[this.state.kind].date_field === "creation";
 		const dateFilters = isMaster ? "" : `${filterField("from", "From", `<input class="ag-from" type="date" value="${dates.from}" aria-label="From date">`)}${filterField("to", "To", `<input class="ag-to" type="date" value="${dates.to}" aria-label="To date">`)}`;
-		// a read-only kind has nothing to add, so the button would only open a dead form
-		const addButton = READ_ONLY_KINDS.includes(this.state.kind)
+		// a read-only kind has nothing to add, so the button would only open a dead
+		// form - and neither has anyone without create rights on it
+		const addButton = READ_ONLY_KINDS.includes(this.state.kind) || !this.perms().create
 			? ""
 			: `<button class="ag-button ag-button-primary ag-new" type="button">${this.icon("add", "xs")} Add ${item.title}</button>`;
-		content.html(`<div class="ag-page-head"><h1>${item.title}</h1>${addButton}</div>
+		// the fast way in: no centre, no name, just the face. The Add button stays for
+		// anyone whose photo cannot be matched.
+		const faceButton = this.state.kind === ATTENDANCE_KIND
+			? `<button class="ag-button ag-button-light ag-face-attendance" type="button">${this.icon("users", "xs")} ${__("Face Attendance")}</button>`
+			: "";
+		content.html(`<div class="ag-page-head"><h1>${item.title}</h1><div class="ag-page-head-actions">${faceButton}${addButton}</div></div>
 			<div class="ag-filter-toolbar" style="--ag-filter-cols:${definitions.length}" aria-label="${this.escape(item.title)} filters">${filters}${dateFilters}${filterField("clear", "", `<button class="ag-button ag-button-light ag-filter-clear" type="button" title="Clear filters">${this.icon("close", "xs")} Clear</button>`, true)}</div>
 			<div class="ag-filter-feedback" aria-live="polite"><span class="ag-filter-error" role="alert"></span><span class="ag-list-progress" role="status">Updating records…</span></div>
 			<div class="ag-table-state"><div class="ag-loading-panel">Loading records...</div></div>`);
@@ -1192,6 +1706,7 @@ class AgriventurePortal {
 		content.on("input.aglist change.aglist", ".ag-from,.ag-to", scheduleFetch);
 		content.on("click.aglist", ".ag-filter-clear", () => this.clearListFilters());
 		content.on("click.aglist", ".ag-new", () => this.openForm());
+		content.on("click.aglist", ".ag-face-attendance", () => this.openFaceAttendance());
 		await this.fetchList();
 	}
 
@@ -1295,7 +1810,10 @@ class AgriventurePortal {
 		// "total" alone is not enough: a crop log's totals are quantities, not currency
 		const isAmount = (fieldname) => /amount|total/.test(fieldname) && !/quantity|qty/.test(fieldname);
 		const value = (row, fieldname) => {
-			if (fieldname === "name") return `<button class="ag-doc-link" data-name="${this.escape(row.name)}">${this.escape(row.name)}</button>`;
+			if (fieldname === (LIST_LINK_COLUMN[this.state.kind] || "name")) {
+				// data-name stays the docname; only what is printed on it changes
+				return `<button class="ag-doc-link" data-name="${this.escape(row.name)}">${this.escape(row[fieldname] || row.name)}</button>`;
+			}
 			// one receipt can carry items from several orders, so this is a comma list -
 			// each PO gets its own chip, opening straight into the Purchase Order kind
 			if (fieldname === "custom_purchase_orders") {
@@ -1303,7 +1821,7 @@ class AgriventurePortal {
 				if (!names.length) return "—";
 				return names.map((po) => `<button class="ag-po-chip" data-name="${this.escape(po)}">${this.escape(po)}</button>`).join("");
 			}
-			if (["status", "workflow_state"].includes(fieldname)) return this.statusBadge(row[fieldname] || "Draft");
+			if (["status", "workflow_state", "pr_status"].includes(fieldname)) return this.statusBadge(row[fieldname] || "Draft");
 			// a POS Profile records whether it is switched off; the list says which it is
 			if (this.state.kind === "pos-profile" && fieldname === "disabled") {
 				return this.statusBadge(Number(row.disabled) ? "Disabled" : "Enabled");
@@ -1311,31 +1829,28 @@ class AgriventurePortal {
 			// a Datetime keeps its time: on a closing entry the shift's start and end are
 			// both today, and only the clock tells them apart
 			if (fieldTypes.get(fieldname) === "Datetime") return this.formatDateTime(row[fieldname]);
-			if (fieldname.includes("date")) return this.formatDate(row[fieldname]);
+			// The name test alone missed every date not called one - Valid Till printed its
+			// raw 2026-09-05. The field's own type is what decides it; the name stays as a
+			// fallback for a column the meta does not describe.
+			if (fieldTypes.get(fieldname) === "Date" || fieldname.includes("date")) return this.formatDate(row[fieldname]);
+			// A Time column reads HH:MM:SS on the desk; a value saved with microseconds still
+			// carries them into this list otherwise, since the generic Data format below
+			// leaves a string untouched. Sliced rather than reformatted - a stored value is
+			// already zero-padded HH:MM:SS(.ffffff), never anything a parser is needed for.
+			if (fieldTypes.get(fieldname) === "Time") return row[fieldname] ? String(row[fieldname]).slice(0, 8) : "—";
 			return frappe.format(row[fieldname], { fieldtype: isAmount(fieldname) ? "Currency" : "Data" }) || "—";
 		};
-		// Supplier Quotation is the one list whose rows are alternatives to each other, so
-		// the cheapest total is worth spotting without reading down the column. Nothing else
-		// gets this: on a Purchase Order or an Invoice the smallest total means nothing.
-		const lowestTotal = this.state.kind === "supplier-quotation" && columns.includes("grand_total")
-			? data.rows.reduce((least, row) => {
-				const amount = Number(row.grand_total);
-				if (!Number.isFinite(amount) || amount <= 0) return least;
-				return least === null || amount < least ? amount : least;
-			}, null)
-			: null;
-		// paging would otherwise make "lowest" mean "lowest of the twenty you can see", which
-		// is a different claim - so the tooltip says which one it is
-		const wholePage = this.listCount <= data.rows.length;
-		const isLowest = (row, fieldname) => lowestTotal !== null
-			&& fieldname === "grand_total" && Number(row.grand_total) === lowestTotal;
+		// The cheapest quotation is decided on the server, per Material Request and on the
+		// items the competing quotations actually share - not by whichever total on this page
+		// happens to be smallest, which said nothing except that someone asked for less.
+		const isLowest = (row, fieldname) => fieldname === "grand_total" && Number(row.is_cheapest) === 1;
 
 		// every cell carries its own column name, so a list can size a column in CSS
 		const cellClass = (fieldname, lowest = false) => ` class="ag-col-${this.escape(fieldname)}${isAmount(fieldname) ? " ag-amount-cell" : ""}${lowest ? " ag-lowest" : ""}"`;
 		const bodyCell = (row, fieldname) => {
 			const lowest = isLowest(row, fieldname);
 			const title = lowest
-				? ` title="${this.escape(wholePage ? __("Lowest total in this filter") : __("Lowest total on this page"))}"`
+				? ` title="${this.escape(__("Cheapest for {0}, compared on the items these quotations share", [row.cheapest_for || ""]))}"`
 				: "";
 			return `<td${cellClass(fieldname, lowest)}${title}>${value(row, fieldname)}</td>`;
 		};
@@ -1444,6 +1959,7 @@ class AgriventurePortal {
 		const aside = showActivity ? `<aside class="ag-activity"><button type="button" class="ag-activity-head" aria-expanded="true"><span class="ag-activity-title"><b>Activity</b><small class="ag-activity-count">…</small></span>${this.icon("down", "xs")}</button><div class="ag-activity-body"><p class="ag-activity-empty">Loading…</p></div></aside>` : "";
 		content.html(`<div class="ag-form-head">${heading}<div class="ag-form-actions">${this.formActions(doc)}</div></div><div class="ag-form-tabs"><div class="ag-tab-list" role="tablist"></div><div class="ag-form-body ${showActivity ? "has-activity" : ""}"><div class="ag-form-main"><div class="ag-tab-panels"></div></div>${aside}</div></div>`);
 		this.buildMetadataForm(content);
+		this.renderFuelStockCard(content);
 		// every kind lands here, whichever builder drew it: the fields exist, so from now on
 		// a change to one of them is the user's. Raised before anything else runs, because a
 		// handler that never fires is invisible - the camera simply stops opening.
@@ -1629,6 +2145,38 @@ class AgriventurePortal {
 		return `<span class="ag-doc-state ag-doc-state-${tone}">${this.escape(label)}</span>`;
 	}
 
+	// A POS Invoice is written by the till, so its form only reads it. The exception is
+	// a return: it is begun here from the Create menu and arrives as an unsaved draft,
+	// and a draft that cannot be saved would be a dead end. Anything already submitted
+	// stays untouchable, and the list's Add button stays gone either way.
+	// What this user may do with the kind on screen, as the server worked it out
+	// and sent with the boot. A flag that is missing counts as allowed: the server
+	// still refuses the write, and an older cached boot should not lock anyone out
+	// of a screen they are entitled to.
+	perms(kind) {
+		const entry = this.boot?.doctypes?.[kind || this.state.kind] || {};
+		return {
+			create: entry.can_create !== false,
+			write: entry.can_write !== false,
+			remove: entry.can_delete !== false,
+			submit: entry.can_submit !== false,
+			cancel: entry.can_cancel !== false,
+			amend: entry.can_amend !== false,
+		};
+	}
+
+	formReadOnly() {
+		// read but not write: the document is shown, not opened for editing, exactly
+		// as the desk does it. Every edit control hangs off this one answer.
+		if (!this.perms().write) return true;
+		// Both fuel forms post their Stock Entry on insert and then lock themselves
+		// (frm.disable_save() in each refresh handler). Once one exists the stock has
+		// already moved, so there is nothing left here to change.
+		if (FUEL_LOCKED_KINDS.includes(this.state.kind) && this.formDoc?.name) return true;
+		if (!READ_ONLY_KINDS.includes(this.state.kind)) return false;
+		return !(this.state.kind === "pos-invoice" && Number(this.formDoc?.docstatus || 0) === 0);
+	}
+
 	formActions(doc) {
 		const docstatus = Number(doc.docstatus || 0);
 		const draft = docstatus === 0;
@@ -1655,7 +2203,9 @@ class AgriventurePortal {
 			"purchase-receipt": { "Purchase Invoice": () => stillOpen(doc.per_billed) },
 			"purchase-order": {
 				"Purchase Receipt": () => stillOpen(doc.per_received),
-				"Purchase Invoice": () => stillOpen(doc.per_billed),
+				// forced off rather than removed, so the erpnext condition it replaces stays
+				// on record: an invoice is raised from the receipt here, not from the order
+				"Purchase Invoice": () => false,
 			},
 		}[this.state.kind] || {};
 		// a cancelled document has nothing left to create from; it can only be amended
@@ -1693,10 +2243,20 @@ class AgriventurePortal {
 		}
 		// Amend, exactly where the desk puts it: a cancelled document that carries an
 		// amended_from field and has not been amended already
-		if (docstatus === 2 && (this.formMeta?.fields || []).some((field) => field.fieldname === "amended_from")) {
+		if (docstatus === 2 && this.perms().amend
+			&& (this.formMeta?.fields || []).some((field) => field.fieldname === "amended_from")) {
 			buttons.push(`<button class="ag-button ag-button-primary ag-amend" type="button">${this.icon("edit", "xs")} ${__("Amend")}</button>`);
 		}
-		if (READ_ONLY_KINDS.includes(this.state.kind)) return buttons.join("");
+		// pushed before the read-only gate, which is what would otherwise cut it off
+		if (docstatus === 1 && this.perms().cancel && CANCELLABLE_READ_ONLY_KINDS.includes(this.state.kind)) {
+			buttons.push(`<button class="ag-button ag-button-danger ag-cancel-doc" type="button">${this.icon("close", "xs")} Cancel</button>`);
+		}
+		// pushed before the gate for the same reason Cancel is: a locked fuel entry can
+		// still take its invoice photos, so it still needs somewhere to save them
+		if (this.fuelAttachOpen() && this.perms().write) {
+			buttons.push('<button class="ag-button ag-button-primary ag-save" type="button">Save</button>');
+		}
+		if (this.formReadOnly()) return buttons.join("");
 		buttons.push('<span class="ag-workflow-actions"></span>');
 		// Update Items, on the same conditions as purchase_order.js:345 - open, not fully
 		// received and not fully billed. can_update_items (a subcontracted order that already
@@ -1706,11 +2266,11 @@ class AgriventurePortal {
 			&& Number(doc.per_received || 0) < 100 && Number(doc.per_billed || 0) < 100) {
 			buttons.push(`<button class="ag-button ag-button-light ag-update-items" type="button">${__("Update Items")}</button>`);
 		}
-		if (docstatus === 1) buttons.push(`<button class="ag-button ag-button-danger ag-cancel-doc" type="button">${this.icon("close", "xs")} Cancel</button>`);
+		if (docstatus === 1 && this.perms().cancel) buttons.push(`<button class="ag-button ag-button-danger ag-cancel-doc" type="button">${this.icon("close", "xs")} Cancel</button>`);
 		if (draft) {
 			buttons.push('<button class="ag-button ag-button-primary ag-save" type="button">Save</button>');
 			// with a workflow in charge, submission happens through its own actions instead
-			if (doc.name && !this.formMeta?.workflow && !NON_SUBMITTABLE_KINDS.includes(this.state.kind)) buttons.push('<button class="ag-button ag-button-light ag-submit" type="button">Submit</button>');
+			if (doc.name && this.perms().submit && !this.formMeta?.workflow && !NON_SUBMITTABLE_KINDS.includes(this.state.kind)) buttons.push('<button class="ag-button ag-button-light ag-submit" type="button">Submit</button>');
 		}
 		return buttons.join("");
 	}
@@ -1774,7 +2334,16 @@ class AgriventurePortal {
 		panel.find(".ag-activity-body").html(events.map((event) => {
 			const when = event.at ? frappe.datetime.comment_when(event.at) : "";
 			const mark = this.activityMark(event.type);
-			const changes = (event.changes || []).map((change) => `<li>${this.escape(change)}</li>`).join("");
+			// A field like Remarks holds ERPNext's own auto-generated block of text (amount,
+			// party, reference number, date, all in one string) - not read-only, so the
+			// backend's own filtering can't drop it, and it dwarfs every real headline change
+			// next to it. Dropped here instead of server-side because that needs a Python edit
+			// plus a restart to take effect, and this workspace is not to be restarted for it.
+			const allChanges = event.changes || [];
+			const visibleChanges = allChanges.filter((change) => !/^Remarks:/i.test(change) && change.length <= 160);
+			const hiddenCount = allChanges.length - visibleChanges.length;
+			const changes = visibleChanges.map((change) => `<li>${this.escape(change)}</li>`).join("")
+				+ (hiddenCount ? `<li>${__("+{0} more update(s)", [hiddenCount])}</li>` : "");
 			return `<article class="ag-activity-item">
 				<span class="ag-activity-mark ag-activity-mark-${mark.tone}">${this.icon(mark.icon, "xs")}</span>
 				<div class="ag-activity-detail">
@@ -1799,7 +2368,25 @@ class AgriventurePortal {
 			return; // no workflow action is better than a broken header
 		}
 		if (!transitions.length) return;
-		holder.html(transitions.map((transition) => `<button class="ag-button ag-button-light ag-wf-action" type="button" data-action="${this.escape(transition.action)}">${this.escape(transition.action)}</button>`).join(""));
+		// A workflow can list the same action more than once, one row per role allowed to
+		// take it: this site's Purchase Order workflow has Rejected --Re-open--> Pending
+		// written twice, for PO Approver L1 and for L2. Anyone holding both roles got both
+		// rows back from get_transitions (workflow.py:67 filters by role, nothing else) and
+		// so got two identical buttons. Frappe's own toolbar does not collapse them either.
+		//
+		// Collapsing by action is not just cosmetic: apply_workflow is given the action name
+		// alone, so duplicate rows cannot be told apart when one is applied. One button is
+		// therefore all that can honestly be offered - and pressing it does what pressing
+		// either of the two did.
+		const unique = [];
+		const seen = new Set();
+		transitions.forEach((transition) => {
+			const action = transition && transition.action;
+			if (!action || seen.has(action)) return;
+			seen.add(action);
+			unique.push(transition);
+		});
+		holder.html(unique.map((transition) => `<button class="ag-button ag-button-light ag-wf-action" type="button" data-action="${this.escape(transition.action)}">${this.escape(transition.action)}</button>`).join(""));
 		holder.find(".ag-wf-action").on("click", (event) => this.runWorkflowAction($(event.currentTarget).data("action")));
 	}
 
@@ -1821,8 +2408,29 @@ class AgriventurePortal {
 		}
 	}
 
+	async cropLogOwner(name) {
+		// only a Stock Entry can be one, and only a saved one can be referenced
+		if (this.state.kind !== "stock-entry" || !name) return null;
+		for (const [doctype, fieldname] of CROP_LOG_STOCK_REFERENCES) {
+			try {
+				const found = await frappe.db.get_list(doctype,
+					{ filters: { [fieldname]: name }, fields: ["name"], limit: 1 });
+				if (found && found.length) return { doctype, name: found[0].name };
+			} catch (error) {
+				// a log this user cannot read is not worth stopping the cancel over;
+				// they simply get the plain question instead of the named one
+			}
+		}
+		return null;
+	}
+
 	async cancelDocument() {
-		const confirmed = await new Promise((resolve) => frappe.confirm(__("Cancel {0}?", [this.formDoc.name]), () => resolve(true), () => resolve(false)));
+		const owner = await this.cropLogOwner(this.formDoc.name);
+		const question = owner
+			? __("{0} was posted by {1} {2}. Cancelling it will un-post that stock. Cancel anyway?",
+				[this.formDoc.name, __(owner.doctype), owner.name])
+			: __("Cancel {0}?", [this.formDoc.name]);
+		const confirmed = await new Promise((resolve) => frappe.confirm(question, () => resolve(true), () => resolve(false)));
 		if (!confirmed) return;
 		const button = this.wrapper.find(".ag-cancel-doc").prop("disabled", true);
 		try {
@@ -2139,11 +2747,14 @@ class AgriventurePortal {
 		}
 	}
 
-	async openMappedHere(kind, method, args) {
+	async openMappedHere(kind, method, args, prepare) {
 		// the desk's mapper builds the document; this workspace opens it, unsaved, on its
 		// own form instead of handing it to the desk
 		const document = await frappe.xcall(method, args);
 		if (!document) return;
+		// a caller may still have to correct the copy, the way the desk's own form does
+		// in its refresh handler
+		if (prepare) prepare(document);
 		this.state.kind = kind;
 		this.formMeta = await this.loadMetadata(kind);
 		this.formDoc = document;
@@ -2181,6 +2792,17 @@ class AgriventurePortal {
 			ignore_prepared_report: true,
 		};
 		try {
+			// A POS Invoice return is a POS Invoice with is_return set, so it opens right here
+			// rather than in the desk. make_sales_return is the whitelisted wrapper the desk
+			// calls too (pos_invoice.py:913); make_return_doc itself is not whitelisted.
+			if (key === "pos-return") {
+				return await this.openMappedHere("pos-invoice",
+					"erpnext.accounts.doctype.pos_invoice.pos_invoice.make_sales_return",
+					{ source_name: doc.name },
+					// the copy must not inherit the consolidation of the sale it reverses -
+					// pos_invoice.js:85 clears the same field on a new return
+					(draft) => { draft.consolidated_invoice = ""; });
+			}
 			if (key === "lcv") return await this.openDeskDoc(`${PR}.make_lcv`, { doctype: doc.doctype, docname: doc.name });
 			// a return is a Purchase Receipt with is_return set, and that page is right here
 			if (key === "return") return await this.openMappedHere("purchase-receipt", `${PR}.make_purchase_return`, { source_name: doc.name });
@@ -2227,13 +2849,118 @@ class AgriventurePortal {
 		}
 	}
 
-	openPrintView(asPdf) {
-		const doctype = encodeURIComponent(this.formMeta.doctype);
-		const name = encodeURIComponent(this.formDoc.name);
+	// The layout is read off the form that is on screen rather than kept as a second list
+	// somebody has to remember to update: formControls holds every header field this
+	// workspace drew, in the order it drew them, and :visible drops whatever a depends_on
+	// rule has hidden. So the page that prints is the page the user was just looking at.
+	printLayout() {
+		// print plumbing, and the fieldtypes that have nothing to say on paper
+		const SKIP = ["naming_series", "letter_head", "select_print_heading", "amended_from", "__newname"];
+		const MUTE = ["Attach", "Attach Image", "Signature", "Password", "Geolocation", "Code", "HTML"];
+		// applyDependsOn hides a field by putting display:none on its own slot, so that
+		// inline style is the exact test. :visible would have been wrong - it walks up to
+		// the tab panel, so printing while the Terms tab was open would have dropped every
+		// field on Details.
+		const shown = (slot) => !slot || !slot.length || slot[0].style.display !== "none";
+		const fields = (this.formControls || [])
+			.filter(({ field, control }) => field && field.fieldname
+				&& !SKIP.includes(field.fieldname) && !MUTE.includes(field.fieldtype)
+				&& control && control.$wrapper
+				&& shown(control.$wrapper.closest(".ag-field-slot")))
+			.map(({ field }) => field.fieldname);
+		const policy = this.formFieldPolicy(this.state.kind);
+		const tables = {};
+		// formTableSlots is filled by buildMetadataForm alone, and the Material Request form
+		// is hand-built and renders its own items table - so the slot is looked for in the
+		// DOM instead, which both paths do create.
+		(this.formMeta.fields || []).forEach((field) => {
+			if (field.fieldtype !== "Table" || !field.fieldname) return;
+			const slot = this.wrapper.find(`.ag-content .ag-field-slot[data-fieldname="${field.fieldname}"]`);
+			if (!slot.length || !shown(slot)) return;
+			// the policy's own column list where there is one; null lets the server fall back
+			// to whatever the child table itself marks in_list_view
+			tables[field.fieldname] = (policy && policy.tables && policy.tables[field.fieldname]) || null;
+		});
+		return { fields, tables };
+	}
+
+	// Both of these used to hand the browser a Desk URL. That took the user out of the
+	// workspace, and it printed whatever each DocType's default format happened to be - on
+	// a Purchase Order that is a custom format with no letter head, so its PDF came out
+	// with no logo while every other document had one.
+	openDeskPrint(asPdf) {
+		const doctype = this.formMeta.doctype;
+		const name = this.formDoc.name;
+		const format = PRINT_FORMATS[this.state.kind] || "";
+		const query = (extra) => Object.entries({ doctype, name, format, ...extra })
+			.filter(([, value]) => value !== "" && value !== undefined && value !== null)
+			.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&");
+		// Frappe's own two: the print view carries the same format picker and the same
+		// Compact / UOM / zero-tax switches the desk shows, and download_pdf returns the
+		// identical file the desk downloads - letterhead and all.
 		const url = asPdf
-			? `/api/method/frappe.utils.print_format.download_pdf?doctype=${doctype}&name=${name}&no_letterhead=0`
-			: `/printview?doctype=${doctype}&name=${name}&trigger_print=1`;
-		window.open(url, "_blank", "noopener");
+			? `/api/method/frappe.utils.print_format.download_pdf?${query({ no_letterhead: 0 })}`
+			: `/printview?${query({ trigger_print: 1 })}`;
+		window.open(url, "_blank");
+	}
+
+	async openPrintView(asPdf) {
+		if (!this.formDoc || !this.formDoc.name) {
+			frappe.msgprint(__("Save the document before printing it."));
+			return;
+		}
+		// the paper this site already prints on, rather than the portal's own layout
+		if (PRINT_VIA_DESK) return this.openDeskPrint(asPdf);
+		const args = {
+			kind: this.state.kind,
+			name: this.formDoc.name,
+			layout: JSON.stringify(this.printLayout()),
+		};
+		try {
+			if (asPdf) {
+				const response = await this.api.call("document_pdf", args);
+				if (!response || !response.content) throw new Error(__("The PDF came back empty."));
+				this.savePdf(response.filename, response.content);
+			} else {
+				const response = await this.api.call("document_print", args);
+				if (!response || !response.html) throw new Error(__("Nothing to print."));
+				this.printHtml(response.html);
+			}
+		} catch (error) {
+			frappe.msgprint({ title: __("Unable to print"), message: this.message(error), indicator: "red" });
+		}
+	}
+
+	savePdf(filename, base64) {
+		const binary = window.atob(base64);
+		const bytes = new Uint8Array(binary.length);
+		for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+		const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = filename || "document.pdf";
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		// revoking straight away can cancel the save on some browsers
+		window.setTimeout(() => URL.revokeObjectURL(url), 20000);
+	}
+
+	printHtml(html) {
+		const view = window.open("", "_blank");
+		if (!view) {
+			frappe.msgprint(__("Allow pop-ups for this site to print."));
+			return;
+		}
+		view.document.write(`<!doctype html><html><head><meta charset="utf-8">
+			<title>${this.escape(this.formDoc.name)}</title></head><body>${html}</body></html>`);
+		view.document.close();
+		// the letter head's logo is an image, and printing before it has loaded prints a gap
+		const images = Array.from(view.document.images || []);
+		Promise.all(images.map((image) => image.complete
+			? null
+			: new Promise((resolve) => { image.onload = resolve; image.onerror = resolve; })))
+			.then(() => { view.focus(); view.print(); });
 	}
 
 
@@ -2326,7 +3053,9 @@ class AgriventurePortal {
 			this.scheduleRecalculation();
 		});
 		this.applyDependsOn();
-		this.wrapper.find(".ag-save").toggle(Boolean(this.formDirty));
+		// a saved fuel entry is never dirty on open, but its proofs are still missing,
+		// so Save has to stay reachable rather than wait for an edit that cannot happen
+		this.wrapper.find(".ag-save").toggle(Boolean(this.formDirty) || this.fuelAttachOpen());
 	}
 
 	// ---------- shared report plumbing ----------
@@ -2965,11 +3694,12 @@ class AgriventurePortal {
 				return `<td class="ag-align-${column.align}">${text}</td>`;
 			}).join("")}</tr>`).join("");
 
-		body.html(filtered.length
+		// Keep column searches available when they hide every loaded record.
+		body.html(data.rows.length
 			? `<div class="ag-rep-table"><table>
 					<thead><tr><th>#</th>${head}</tr>
 						<tr class="ag-col-search-row"><td></td>${searchRow}</tr></thead>
-					<tbody>${rows}</tbody>
+					<tbody>${rows || `<tr><td colspan="${data.columns.length + 1}">${__("No matching records. Clear a column search to see all records.")}</td></tr>`}</tbody>
 					<tfoot><tr><td colspan="6" class="ag-align-right">${__("Total Quantity")}</td>
 						<td class="ag-align-right">${this.reportNumber(total)}</td><td></td></tr></tfoot>
 				</table></div>
@@ -3011,6 +3741,363 @@ class AgriventurePortal {
 		});
 	}
 
+	// ---- ERPNext's own ledgers, drawn here ------------------------------------
+
+	loadGeneralLedger() { return this.loadLedgerReport("general-ledger"); }
+
+	loadStockLedger() { return this.loadLedgerReport("stock-ledger"); }
+
+	async loadLedgerReport(key) {
+		const config = LEDGER_REPORTS[key];
+		this.state.view = key;
+		this.setCrumb(__(config.title));
+		this.wrapper.find(".ag-nav").removeClass("active");
+		this.wrapper.find(`[data-ledger="${key}"]`).addClass("active");
+		this.wrapper.find(".agriventure-app").removeClass("ag-menu-open");
+
+		const dates = this.dateDefaults();
+		this.ledgerFilters = this.ledgerFilters || {};
+		this.ledgerFilters[key] = this.ledgerFilters[key] || {
+			from: dates.from, to: dates.to,
+			company: frappe.defaults.get_user_default("Company") || "",
+			page: 1, pageSize: REPORT_PAGE_SIZES[0], columnSearch: {},
+		};
+		const state = this.ledgerFilters[key];
+
+		const pickers = [{ key: "company", label: "Company", doctype: "Company", empty: "All Companies" },
+			...config.filters];
+		const slots = pickers.map((filter) =>
+			`<div class="ag-filter-field"><span class="ag-filter-label-slot">${__(filter.label)}</span>
+				<div class="ag-filter-control"><div class="ag-report-slot" data-slot="${filter.key}"></div></div></div>`).join("");
+
+		const content = this.wrapper.find(".ag-content").html(`<div class="ag-page-head"><h1>${__(config.title)}</h1><button type="button" class="ag-button ag-button-light ag-rep-back">${this.icon("left", "xs")} ${__("Back to Report")}</button></div>
+			<div class="ag-filter-toolbar" style="--ag-filter-cols:${pickers.length + 2}">
+				<div class="ag-filter-field"><span class="ag-filter-label-slot">${__("From Date")}</span>
+					<div class="ag-filter-control"><input class="ag-rep-from ag-filter-date-input" type="date" value="${this.escape(state.from)}"></div></div>
+				<div class="ag-filter-field"><span class="ag-filter-label-slot">${__("To Date")}</span>
+					<div class="ag-filter-control"><input class="ag-rep-to ag-filter-date-input" type="date" value="${this.escape(state.to)}"></div></div>
+				${slots}
+			</div>
+			<div class="ag-filter-feedback" aria-live="polite"><span class="ag-filter-error" role="alert"></span></div>
+			<div class="ag-rep-modes"><span class="ag-rep-mode-spacer"></span>
+				<button type="button" class="ag-button ag-button-light ag-rep-export" data-format="xlsx">${this.icon("small-file", "xs")} ${__("Export Excel")}</button>
+				<button type="button" class="ag-button ag-button-light ag-rep-export" data-format="pdf">${this.icon("printer", "xs")} ${__("Export PDF")}</button>
+			</div>
+			<div class="ag-report-body"><div class="ag-loading-panel">${__("Loading report...")}</div></div>`);
+
+		for (const filter of pickers) {
+			const holder = content.find(`[data-slot="${filter.key}"]`).addClass("ag-list-filter");
+			const control = frappe.ui.form.make_control({
+				parent: holder,
+				df: {
+					fieldtype: filter.doctype ? "Link" : "Data",
+					options: filter.doctype,
+					label: __(filter.label),
+					placeholder: __(filter.empty),
+				},
+				render_input: true,
+			});
+			control.set_value(state[filter.key] || "");
+			control.refresh();
+			control.$input?.attr({ placeholder: __(filter.empty), autocomplete: "off" });
+			if (filter.doctype) this.bindComboSearch(control, __(filter.label));
+			control.$input.on("change awesomplete-selectcomplete", () => {
+				state[filter.key] = control.get_value();
+				state.page = 1;
+				this.renderLedgerReport(key);
+			});
+		}
+
+		content.off(".agledger");
+		content.on("change.agledger", ".ag-rep-from,.ag-rep-to", () => {
+			state.from = content.find(".ag-rep-from").val();
+			state.to = content.find(".ag-rep-to").val();
+			state.page = 1;
+			this.renderLedgerReport(key);
+		});
+		content.on("click.agledger", ".ag-rep-export", (event) => {
+			const format = $(event.currentTarget).data("format");
+			window.open(this.reportExportUrl(`desk_report_${format}`,
+				{ key, filters: JSON.stringify(this.ledgerArgs(key)) }), "_blank");
+		});
+		content.on("input.agledger", ".ag-col-search", frappe.utils.debounce((event) => {
+			state.columnSearch[$(event.target).data("col")] = String(event.target.value || "").toLowerCase().trim();
+			state.page = 1;
+			this.renderLedgerReport(key);
+		}, 220));
+		this.bindReportPager(content, state, () => this.renderLedgerReport(key));
+
+		this.renderLedgerReport(key);
+	}
+
+	ledgerArgs(key) {
+		const state = (this.ledgerFilters || {})[key] || {};
+		const args = { from_date: state.from, to_date: state.to, company: state.company };
+		for (const filter of LEDGER_REPORTS[key].filters) args[filter.key] = state[filter.key] || "";
+		return args;
+	}
+
+	ledgerCell(column, value) {
+		if (value === null || value === undefined || value === "") return "";
+		if (["Currency", "Float", "Int", "Percent"].includes(column.fieldtype)) {
+			return frappe.format(value, { fieldtype: column.fieldtype, options: column.options });
+		}
+		if (["Date", "Datetime"].includes(column.fieldtype)) return frappe.datetime.str_to_user(String(value));
+		// a Link would render as an anchor into the desk, which is the one place this
+		// workspace does not want to send anyone - the name itself is what matters
+		return this.escape(String(value));
+	}
+
+	async renderLedgerReport(key) {
+		const content = this.wrapper.find(".ag-content");
+		const state = this.ledgerFilters[key];
+		const body = content.find(".ag-report-body");
+
+		if (!this.checkReportDates(state, content)) return;
+
+		let data;
+		try {
+			data = await this.api.deskReport(key, this.ledgerArgs(key));
+		} catch (error) {
+			body.html(this.errorMarkup(error));
+			return;
+		}
+
+		const columns = data.columns || [];
+		const searches = state.columnSearch || {};
+		const filtered = (data.rows || []).filter((row) => columns.every((column) => {
+			const needle = searches[column.fieldname];
+			return !needle || String(row[column.fieldname] ?? "").toLowerCase().includes(needle);
+		}));
+
+		const page = this.reportPage(filtered, state);
+		const align = (column) => (["Currency", "Float", "Int", "Percent"].includes(column.fieldtype) ? "right" : "left");
+		const head = columns.map((column) => `<th class="ag-align-${align(column)}">${this.escape(column.label || column.fieldname)}</th>`).join("");
+		const searchRow = columns.map((column) => `<td><input class="ag-col-search" type="text" data-col="${column.fieldname}"
+			value="${this.escape(searches[column.fieldname] || "")}" aria-label="${this.escape(column.label || column.fieldname)}"></td>`).join("");
+		const rows = page.rows.map((row, index) => `<tr><td>${page.start + index + 1}</td>${columns
+			.map((column) => `<td class="ag-align-${align(column)}">${this.ledgerCell(column, row[column.fieldname])}</td>`).join("")}</tr>`).join("");
+
+		body.html(filtered.length
+			? `<div class="ag-rep-table"><table>
+					<thead><tr><th>#</th>${head}</tr>
+						<tr class="ag-col-search-row"><td></td>${searchRow}</tr></thead>
+					<tbody>${rows}</tbody>
+				</table></div>
+				${this.reportPagerMarkup(page, state)}`
+			: `<div class="ag-rep-empty"><b>${__("Nothing on this ledger.")}</b>
+					<span>${__("No entries between {0} and {1} for these filters.", [state.from, state.to])}</span></div>`);
+	}
+
+	// ---- fuel dashboards -----------------------------------------------------
+
+	loadFuelStockReport() { return this.loadFuelReport("fuel-stock"); }
+
+	loadFuelIssueReport() { return this.loadFuelReport("fuel-issue"); }
+
+	async loadFuelReport(report) {
+		const config = FUEL_REPORTS[report];
+		this.state.view = `${report}-report`;
+		this.setCrumb(__(config.title));
+		this.wrapper.find(".ag-nav").removeClass("active");
+		// the sidebar carries one Report entry, so it stays lit for every report
+		this.wrapper.find("[data-action=open-kpi]").addClass("active");
+		this.wrapper.find(".agriventure-app").removeClass("ag-menu-open");
+
+		const dates = this.dateDefaults();
+		this.fuelFilters = this.fuelFilters || {};
+		this.fuelFilters[report] = this.fuelFilters[report] || {
+			from: dates.from, to: dates.to, mode: "table",
+			page: 1, pageSize: REPORT_PAGE_SIZES[0], columnSearch: {},
+		};
+		const state = this.fuelFilters[report];
+
+		const slots = config.filters.map((filter) =>
+			`<div class="ag-filter-field"><span class="ag-filter-label-slot">${__(filter.label)}</span>
+				<div class="ag-filter-control"><div class="ag-report-slot" data-slot="${filter.key}"></div></div></div>`).join("");
+
+		const content = this.wrapper.find(".ag-content").html(`<div class="ag-page-head"><h1>${__(config.title)}</h1><button type="button" class="ag-button ag-button-light ag-rep-back">${this.icon("left", "xs")} ${__("Back to Report")}</button></div>
+			<div class="ag-filter-toolbar" style="--ag-filter-cols:${config.filters.length + 2}">
+				<div class="ag-filter-field"><span class="ag-filter-label-slot">${__("From Date")}</span>
+					<div class="ag-filter-control"><input class="ag-rep-from ag-filter-date-input" type="date" value="${this.escape(state.from)}"></div></div>
+				<div class="ag-filter-field"><span class="ag-filter-label-slot">${__("To Date")}</span>
+					<div class="ag-filter-control"><input class="ag-rep-to ag-filter-date-input" type="date" value="${this.escape(state.to)}"></div></div>
+				${slots}
+			</div>
+			<div class="ag-filter-feedback" aria-live="polite"><span class="ag-filter-error" role="alert"></span></div>
+			<div class="ag-rep-modes">
+				<button type="button" class="ag-button ag-rep-mode" data-mode="table">${__("Table View")}</button>
+				<button type="button" class="ag-button ag-rep-mode" data-mode="graph">${__("Graph View")}</button>
+				<span class="ag-rep-mode-spacer"></span>
+				<button type="button" class="ag-button ag-button-light ag-rep-export" data-format="xlsx">${this.icon("small-file", "xs")} ${__("Export Excel")}</button>
+				<button type="button" class="ag-button ag-button-light ag-rep-export" data-format="pdf">${this.icon("printer", "xs")} ${__("Export PDF")}</button>
+			</div>
+			<div class="ag-report-body"><div class="ag-loading-panel">${__("Loading report...")}</div></div>`);
+
+		for (const filter of config.filters) {
+			const holder = content.find(`[data-slot="${filter.key}"]`).addClass("ag-list-filter");
+			const control = frappe.ui.form.make_control({
+				parent: holder,
+				df: { fieldtype: "Link", options: filter.doctype, label: __(filter.label), placeholder: __(filter.empty) },
+				render_input: true,
+			});
+			if (filter.query) control.get_query = () => ({ filters: filter.query });
+			control.set_value(state[filter.key] || "");
+			control.refresh();
+			control.$input?.attr({ placeholder: __(filter.empty), autocomplete: "off" });
+			this.bindComboSearch(control, __(filter.label));
+			control.$input.on("change awesomplete-selectcomplete", () => {
+				state[filter.key] = control.get_value();
+				state.page = 1;
+				this.renderFuelReport(report);
+			});
+		}
+
+		content.off(".agfuelrep");
+		content.on("change.agfuelrep", ".ag-rep-from,.ag-rep-to", () => {
+			state.from = content.find(".ag-rep-from").val();
+			state.to = content.find(".ag-rep-to").val();
+			state.page = 1;
+			this.renderFuelReport(report);
+		});
+		content.on("click.agfuelrep", ".ag-rep-mode", (event) => {
+			state.mode = $(event.currentTarget).data("mode");
+			this.renderFuelReport(report);
+		});
+		content.on("click.agfuelrep", ".ag-rep-export", (event) => {
+			const format = $(event.currentTarget).data("format");
+			window.open(this.reportExportUrl(`${config.method}_${format}`, this.fuelArgs(report)), "_blank");
+		});
+		// a search box under each column header, narrowing what is already loaded
+		content.on("input.agfuelrep", ".ag-col-search", frappe.utils.debounce((event) => {
+			state.columnSearch[$(event.target).data("col")] = String(event.target.value || "").toLowerCase().trim();
+			state.page = 1;
+			this.renderFuelReport(report);
+		}, 220));
+		// the entry itself, and the Stock Entry it posted, both open inside the workspace
+		// the entry cell wears both classes so it looks like a link; :not() keeps this
+		// handler off it, or one click would open the Stock Entry as well
+		content.on("click.agfuelrep", ".ag-se-jump:not(.ag-fuel-jump)", (event) => this.openPortalDoc("stock-entry", $(event.currentTarget).data("name")));
+		content.on("click.agfuelrep", ".ag-fuel-jump", (event) => this.openPortalDoc(
+			report === "fuel-stock" ? "fuel-for-stock" : "fuel-for-distribution", $(event.currentTarget).data("name")));
+		this.bindReportPager(content, state, () => this.renderFuelReport(report));
+
+		this.renderFuelReport(report);
+	}
+
+	fuelArgs(report) {
+		const state = (this.fuelFilters || {})[report] || {};
+		const args = { from_date: state.from, to_date: state.to };
+		for (const filter of FUEL_REPORTS[report].filters) args[filter.key] = state[filter.key] || "";
+		return args;
+	}
+
+	async renderFuelReport(report) {
+		const config = FUEL_REPORTS[report];
+		const content = this.wrapper.find(".ag-content");
+		const state = this.fuelFilters[report];
+		const body = content.find(".ag-report-body");
+
+		content.find(".ag-rep-mode").each((_, node) => {
+			const active = $(node).data("mode") === state.mode;
+			$(node).toggleClass("ag-button-primary", active).toggleClass("ag-button-light", !active);
+		});
+
+		if (!this.checkReportDates(state, content)) return;
+
+		let data;
+		try {
+			data = await this.api[config.load](this.fuelArgs(report));
+		} catch (error) {
+			body.html(this.errorMarkup(error));
+			return;
+		}
+
+		if (state.mode === "graph") {
+			body.html(`<div class="ag-rep-chart-card"><div class="ag-rep-chart" data-chart="fuel"></div>
+				<div class="ag-rep-chart-title">${__(config.chart)}</div></div>`);
+			this.drawFuelChart(body, data);
+			return;
+		}
+
+		const searches = state.columnSearch || {};
+		const filtered = data.rows.filter((row) => data.columns.every((column) => {
+			const needle = searches[column.key];
+			return !needle || String(row[column.key] ?? "").toLowerCase().includes(needle);
+		}));
+
+		const page = this.reportPage(filtered, state);
+		const cell = (row, column) => {
+			if (column.key === "stock_entry" && row.stock_entry) {
+				return `<button type="button" class="ag-se-jump" data-name="${this.escape(row.stock_entry)}">${this.escape(row.stock_entry)}</button>`;
+			}
+			if (column.key === "entry" && row.entry) {
+				return `<button type="button" class="ag-se-jump ag-fuel-jump" data-name="${this.escape(row.entry)}">${this.escape(row.entry)}</button>`;
+			}
+			if (config.money.includes(column.key)) return this.reportMoney(row[column.key]);
+			if (column.align === "right") return this.reportNumber(row[column.key]);
+			return this.escape(String(row[column.key] ?? ""));
+		};
+
+		const head = data.columns.map((column) => `<th class="ag-align-${column.align}">${this.escape(column.label)}</th>`).join("");
+		const searchRow = data.columns.map((column) => `<td><input class="ag-col-search" type="text" data-col="${column.key}"
+			value="${this.escape(searches[column.key] || "")}" aria-label="${this.escape(column.label)}"></td>`).join("");
+		const rows = page.rows.map((row, index) => `<tr><td>${page.start + index + 1}</td>${data.columns
+			.map((column) => `<td class="ag-align-${column.align}">${cell(row, column)}</td>`).join("")}</tr>`).join("");
+
+		// the totals follow the column search, so they describe the table on screen
+		const foot = config.totals.map((total) => {
+			const sum = filtered.reduce((running, row) => running + Number(row[total.key] || 0), 0);
+			const shown = total.money ? this.reportMoney(sum) : this.reportNumber(sum);
+			return `<tr><td colspan="${data.columns.length}" class="ag-align-right">${__(total.label)}</td>
+				<td class="ag-align-right">${shown}</td></tr>`;
+		}).join("");
+
+		body.html(filtered.length
+			? `<div class="ag-rep-table"><table>
+					<thead><tr><th>#</th>${head}</tr>
+						<tr class="ag-col-search-row"><td></td>${searchRow}</tr></thead>
+					<tbody>${rows}</tbody>
+					<tfoot>${foot}</tfoot>
+				</table></div>
+				${this.reportPagerMarkup(page, state)}`
+			: `<div class="ag-rep-empty"><b>${__(config.emptyTitle)}</b>
+					<span>${__(config.empty, [state.from, state.to])}</span></div>`);
+	}
+
+	drawFuelChart(body, data) {
+		if (typeof frappe.Chart !== "function") return;
+		const holder = body.find('[data-chart="fuel"]');
+		if (!holder.length || !(data.graph || []).length) {
+			holder.html(`<p class="ag-rep-nochart">${__("No graph data for these filters.")}</p>`);
+			return;
+		}
+
+		// one line per fuel, litres added up per day - the same shape as Production
+		const labels = [];
+		const byItem = {};
+		for (const row of data.graph) {
+			if (!labels.includes(row.date)) labels.push(row.date);
+			byItem[row.item] = byItem[row.item] || {};
+			byItem[row.item][row.date] = (byItem[row.item][row.date] || 0) + Number(row.value || 0);
+		}
+		labels.sort();
+
+		const datasets = Object.keys(byItem).sort().map((item) => ({
+			name: item,
+			values: labels.map((date) => parseFloat((byItem[item][date] || 0).toFixed(2))),
+		}));
+
+		new frappe.Chart(holder[0], {
+			type: "line",
+			data: { labels: labels.map((date) => date.slice(8) + "-" + date.slice(5, 7)), datasets },
+			height: window.innerWidth < 768 ? 260 : 380,
+			lineOptions: { regionFill: 0, dotSize: 5, hideDots: 0 },
+			axisOptions: { xAxisMode: "tick", yAxisMode: "span" },
+			tooltipOptions: { formatTooltipY: (value) => `${value} L` },
+		});
+	}
+
 	async loadKpiDashboard(date = null) {
 		this.state.view = "kpi";
 		this.kpiDate = date || this.kpiDate || frappe.datetime.get_today();
@@ -3031,6 +4118,12 @@ class AgriventurePortal {
 			const tile = $(event.currentTarget);
 			const report = tile.data("report");
 			if (report) return this[REPORT_VIEWS[report]]();
+			const desk = tile.data("desk");
+			if (desk) {
+				// the company is the one filter every one of them asks for first
+				return this.openDeskRoute("query-report", desk,
+					{ company: frappe.defaults.get_user_default("Company") || "" });
+			}
 			this.state.kind = tile.data("kind");
 			this.state.start = 0;
 			this.loadList();
@@ -3052,8 +4145,12 @@ class AgriventurePortal {
 		</section>`).join("");
 
 		const tiles = KPI_SHORTCUTS
-			.filter((tile) => (tile.report ? REPORT_VIEWS[tile.report] : this.config[tile.kind]))
-			.map((tile) => `<button type="button" class="ag-kpi-tile" ${tile.report ? `data-report="${tile.report}"` : `data-kind="${tile.kind}"`}>
+			// a tile is only offered when there is something behind it: a report this
+			// workspace draws, a list it has, or a report name for the desk
+			.filter((tile) => (tile.desk ? true : tile.report ? REPORT_VIEWS[tile.report] : this.config[tile.kind]))
+			.map((tile) => `<button type="button" class="ag-kpi-tile" ${tile.desk
+				? `data-desk="${this.escape(tile.desk)}"`
+				: tile.report ? `data-report="${tile.report}"` : `data-kind="${tile.kind}"`}>
 				<span class="ag-kpi-tile-icon">${this.icon(tile.icon, "sm")}</span>
 				<span>${this.escape(tile.label)}</span>
 			</button>`).join("");
@@ -3177,6 +4274,585 @@ class AgriventurePortal {
 		dialog.show();
 	}
 
+	// ---------- new custom checkout (additive - the classic flow above is untouched) ----------
+
+	async openPosCheckoutLanding() {
+		this.setActive("pos-new");
+		this.setCrumb(__("Point of Sale"));
+		this.wrapper.find(".ag-nav").removeClass("active");
+		this.wrapper.find("[data-action=open-pos-new]").addClass("active");
+
+		const content = this.wrapper.find(".ag-content").html(`<div class="ag-pos-landing">
+			<div class="ag-pos-card">
+				<span class="ag-pos-icon">${this.icon("retail", "lg")}</span>
+				<h1>${__("Point of Sale")}</h1>
+				<p>${__("A shift has to be open before the till can be used.")}</p>
+				<button type="button" class="ag-button ag-button-primary ag-pos-start-new">${__("Open Shift")}</button>
+			</div>
+		</div>`);
+		content.off(".agposnew").on("click.agposnew", ".ag-pos-start-new", () => this.startPosShiftNew());
+
+		this.startPosShiftNew();
+	}
+
+	async startPosShiftNew() {
+		let open = [];
+		try {
+			open = (await frappe.call({
+				method: `${POS_PAGE_METHOD}.check_opening_entry`,
+				args: { user: frappe.session.user },
+			})).message || [];
+		} catch (error) {
+			frappe.msgprint({ title: __("Point of Sale"), message: this.message(error), indicator: "red" });
+			return;
+		}
+		this.askPosOpeningEntryNew(open);
+	}
+
+	// A near-duplicate of askPosOpeningEntry above, on purpose: the only difference is where
+	// it goes after the shift is ready (this workspace's own checkout, not ERPNext's desk POS).
+	askPosOpeningEntryNew(open = []) {
+		const rows = [
+			{ fieldname: "mode_of_payment", fieldtype: "Link", options: "Mode of Payment", label: __("Mode of Payment"), in_list_view: 1, reqd: 1 },
+			{ fieldname: "opening_amount", fieldtype: "Currency", label: __("Opening Amount"), options: "company:company_currency", in_list_view: 1,
+				onchange() {
+					(dialog.fields_dict.balance_details.df.data || []).some((row) => {
+						if (row.idx !== this.doc.idx) return false;
+						row.opening_amount = this.value;
+						dialog.fields_dict.balance_details.grid.refresh();
+						return true;
+					});
+				},
+			},
+		];
+
+		const loadPaymentMethods = () => {
+			const profile = dialog.fields_dict.pos_profile.get_value();
+			if (!profile) return;
+			frappe.db.get_doc("POS Profile", profile).then(({ payments }) => {
+				dialog.fields_dict.balance_details.df.data = (payments || []).map(({ mode_of_payment }) => ({
+					mode_of_payment,
+					opening_amount: "0",
+				}));
+				dialog.fields_dict.balance_details.grid.refresh();
+			});
+		};
+
+		const dialog = new frappe.ui.Dialog({
+			title: __("Create POS Opening Entry"),
+			fields: [
+				{ fieldtype: "Link", fieldname: "company", label: __("Company"), options: "Company", reqd: 1,
+					default: frappe.defaults.get_default("company") },
+				{ fieldtype: "Link", fieldname: "pos_profile", label: __("POS Profile"), options: "POS Profile", reqd: 1,
+					get_query: () => ({ query: POS_PROFILE_QUERY, filters: { company: dialog.fields_dict.company.get_value() } }),
+					onchange: () => loadPaymentMethods() },
+				{ fieldname: "balance_details", fieldtype: "Table", label: __("Opening Balance Details"),
+					cannot_add_rows: false, in_place_edit: true, reqd: 1, data: [], fields: rows },
+			],
+			primary_action_label: __("Submit"),
+			// the button names the shift it will continue, since nothing on the form does
+			// any more. open[0] is the newest - check_opening_entry orders by start date desc
+			secondary_action_label: open.length ? __("Continue {0}", [open[0].name]) : null,
+			secondary_action: open.length
+				? () => {
+					const chosen = open[0];
+					dialog.hide();
+					this.openPosCheckout(chosen.pos_profile, chosen.name);
+				}
+				: null,
+			primary_action: async ({ company, pos_profile, balance_details }) => {
+				const filled = (balance_details || []).filter((row) => row.mode_of_payment);
+				if (!filled.length) {
+					frappe.show_alert({ message: __("Please add Mode of payments and opening balance details."), indicator: "red" });
+					return;
+				}
+				let opened;
+				try {
+					opened = await frappe.call({
+						method: `${POS_PAGE_METHOD}.create_opening_voucher`,
+						args: { pos_profile, company, balance_details: filled },
+						freeze: true,
+					}).then((response) => response.message);
+				} catch (error) {
+					return;
+				}
+				dialog.hide();
+				this.openPosCheckout(pos_profile, opened && opened.name);
+			},
+		});
+		dialog.show();
+		dialog.$wrapper.addClass("ag-dialog");
+	}
+
+	async openPosCheckout(posProfile, openingEntryName) {
+		this.setActive("pos-new");
+		this.setCrumb(__("Point of Sale"));
+		this.wrapper.find(".ag-nav").removeClass("active");
+		this.wrapper.find("[data-action=open-pos-new]").addClass("active");
+
+		const content = this.wrapper.find(".ag-content").html(`<div class="ag-loading-panel">${__("Loading till...")}</div>`);
+		let profile;
+		try {
+			profile = await frappe.call({
+				method: `${POS_PAGE_METHOD}.get_pos_profile_data`,
+				args: { pos_profile: posProfile },
+			}).then((response) => response.message);
+		} catch (error) {
+			content.html(this.errorMarkup(error));
+			return;
+		}
+
+		this.posCart = {
+			step: "cart",
+			openingEntry: openingEntryName || null,
+			posProfile,
+			profile,
+			company: profile.company,
+			warehouse: profile.warehouse,
+			// The standard ERPNext POS screen falls back to the site's default selling price
+			// list whenever the POS Profile leaves this blank (confirmed against
+			// Selling Settings.selling_price_list on this site) - matched here so rates aren't
+			// silently read as null/0 just because the profile itself never set one.
+			priceList: profile.selling_price_list || frappe.defaults.get_default("selling_price_list") || "Standard Selling",
+			currency: profile.currency || "INR",
+			customer: profile.customer || "",
+			itemGroup: "",
+			searchTerm: "",
+			itemsStart: 0,
+			itemsHasMore: false,
+			allowRateChange: Boolean(profile.allow_rate_change),
+			items: [],
+			payments: (profile.payments || []).map((row) => ({ mode_of_payment: row.mode_of_payment, amount: 0 })),
+			invoiceName: null,
+		};
+
+		content.html(`<div class="ag-pos-checkout">
+			<section class="ag-pos-catalog">
+				<div class="ag-pos-catalog-head">
+					<div class="ag-search-control">${this.icon("search", "xs")}<input class="ag-pos-search" type="text" placeholder="${__("Search item code, name or barcode")}"></div>
+					<select class="ag-pos-item-group"><option value="">${__("All Item Groups")}</option></select>
+				</div>
+				<div class="ag-pos-item-grid"><div class="ag-loading-panel">${__("Loading items...")}</div></div>
+				<div class="ag-pos-item-more-wrap"></div>
+			</section>
+			<aside class="ag-pos-cart">
+				<div class="ag-pos-cart-head"><b>${__("Item Cart")}</b></div>
+				<div class="ag-pos-cart-customer" data-fieldname="pos_customer"></div>
+				<div class="ag-pos-cart-lines"><div class="ag-pos-cart-empty">${__("No items in cart")}</div></div>
+				<div class="ag-pos-cart-totals">
+					<div><span>${__("Total Quantity")}</span><b class="ag-pos-total-qty">0</b></div>
+					<div><span>${__("Net Total")}</span><b class="ag-pos-net-total">${this.reportMoney(0)}</b></div>
+					<div class="ag-pos-grand"><span>${__("Grand Total")}</span><b class="ag-pos-grand-total">${this.reportMoney(0)}</b></div>
+				</div>
+				<button type="button" class="ag-button ag-button-primary ag-pos-checkout-btn" disabled>${__("Checkout")}</button>
+			</aside>
+		</div>`);
+
+		this.bindPosCheckoutEvents(content);
+		this.renderPosCustomerControl();
+		await this.loadPosItemGroups();
+		await this.loadPosItems(true);
+		this.renderPosCart();
+	}
+
+	bindPosCheckoutEvents(content) {
+		content.off(".agposcart");
+		const search = frappe.utils.debounce(() => {
+			this.posCart.searchTerm = content.find(".ag-pos-search").val().trim();
+			this.loadPosItems(true);
+		}, 300);
+		content.on("input.agposcart", ".ag-pos-search", search);
+		content.on("change.agposcart", ".ag-pos-item-group", (event) => {
+			this.posCart.itemGroup = $(event.currentTarget).val();
+			this.loadPosItems(true);
+		});
+		content.on("click.agposcart", ".ag-pos-item-tile", (event) => {
+			const tile = $(event.currentTarget);
+			this.addToPosCart({
+				item_code: tile.data("item-code"),
+				item_name: tile.data("item-name"),
+				uom: tile.data("uom"),
+				rate: Number(tile.data("rate") || 0),
+				actual_qty: Number(tile.data("qty") || 0),
+			});
+		});
+		content.on("click.agposcart", ".ag-pos-item-more", () => this.loadPosItems(false));
+		content.on("click.agposcart", ".ag-pos-line-remove", (event) => this.removePosCartLine($(event.currentTarget).data("item-code")));
+		content.on("click.agposcart", ".ag-pos-line-minus", (event) => this.changePosCartQty($(event.currentTarget).data("item-code"), -1));
+		content.on("click.agposcart", ".ag-pos-line-plus", (event) => this.changePosCartQty($(event.currentTarget).data("item-code"), 1));
+		content.on("change.agposcart", ".ag-pos-line-qty", (event) => {
+			const input = $(event.currentTarget);
+			this.setPosCartQty(input.data("item-code"), Number(input.val()));
+		});
+		content.on("change.agposcart", ".ag-pos-line-rate", (event) => {
+			const input = $(event.currentTarget);
+			const line = this.posCart.items.find((row) => row.item_code === input.data("item-code"));
+			if (line) { line.rate = Number(input.val()) || 0; this.renderPosCart(); }
+		});
+		content.on("click.agposcart", ".ag-pos-checkout-btn", () => this.openPosCheckoutPayment());
+	}
+
+	renderPosCustomerControl() {
+		const holder = this.wrapper.find('[data-fieldname="pos_customer"]').empty();
+		if (!holder.length) return;
+		const control = frappe.ui.form.make_control({
+			parent: holder[0],
+			df: { fieldtype: "Link", fieldname: "customer", options: "Customer", placeholder: __("Select Customer") },
+			render_input: true,
+		});
+		control.refresh();
+		if (this.posCart.customer) control.set_value(this.posCart.customer);
+		control.$input.on("change.agposcart awesomplete-selectcomplete.agposcart", () => {
+			this.posCart.customer = control.get_value();
+		});
+		this.posCustomerControl = control;
+	}
+
+	async loadPosItemGroups() {
+		let root;
+		try {
+			root = await frappe.call({ method: `${POS_PAGE_METHOD}.get_parent_item_group` }).then((response) => response.message);
+		} catch (error) {
+			root = null;
+		}
+		let groups = [];
+		try {
+			groups = await frappe.db.get_list("Item Group", {
+				filters: root ? { parent_item_group: root } : {},
+				fields: ["name"],
+				limit: 100,
+				order_by: "name asc",
+			});
+		} catch (error) {
+			groups = [];
+		}
+		const select = this.wrapper.find(".ag-pos-item-group");
+		groups.forEach((group) => select.append(`<option value="${this.escape(group.name)}">${this.escape(group.name)}</option>`));
+	}
+
+	async loadPosItems(reset) {
+		const cart = this.posCart;
+		if (reset) cart.itemsStart = 0;
+		const grid = this.wrapper.find(".ag-pos-item-grid");
+		const moreWrap = this.wrapper.find(".ag-pos-item-more-wrap");
+		if (reset) grid.html(`<div class="ag-loading-panel">${__("Loading items...")}</div>`);
+		let response;
+		try {
+			response = await frappe.call({
+				method: `${POS_PAGE_METHOD}.get_items`,
+				args: {
+					start: cart.itemsStart,
+					page_length: POS_ITEM_PAGE_SIZE,
+					price_list: cart.priceList,
+					item_group: cart.itemGroup || "",
+					pos_profile: cart.posProfile,
+					search_term: cart.searchTerm || "",
+				},
+			}).then((res) => res.message);
+		} catch (error) {
+			grid.html(this.errorMarkup(error));
+			moreWrap.html("");
+			return;
+		}
+		const items = response.items || [];
+		cart.itemsHasMore = items.length === POS_ITEM_PAGE_SIZE;
+		const tiles = items.map((item) => {
+			const rate = item.price_list_rate || 0;
+			const qty = Number(item.actual_qty || 0);
+			// only 41 of the 493 items carry a picture, so a tile without one keeps the
+			// letter tile instead of leaving a hole - which is what the Desk POS does too
+			const image = item.item_image
+				? `<img src="${this.escape(item.item_image)}" alt="" loading="lazy">`
+				: `<b>${this.escape((item.item_name || item.item_code || "?").trim().charAt(0).toUpperCase())}</b>`;
+			return `<button type="button" class="ag-pos-item-tile" data-item-code="${this.escape(item.item_code)}"
+					data-item-name="${this.escape(item.item_name || item.item_code)}" data-uom="${this.escape(item.uom || item.stock_uom || "")}"
+					data-rate="${rate}" data-qty="${qty}">
+				<span class="ag-pos-item-thumb">${image}<span class="ag-pos-item-qty">${this.reportNumber(qty)}</span></span>
+				<span class="ag-pos-item-name">${this.escape(item.item_name || item.item_code)}</span>
+				<span class="ag-pos-item-rate">${this.reportMoney(rate)} / ${this.escape(item.uom || item.stock_uom || "")}</span>
+			</button>`;
+		}).join("");
+		if (reset) {
+			grid.html(tiles || `<div class="ag-item-picker-empty">${__("No items found")}</div>`);
+		} else {
+			grid.append(tiles);
+		}
+		cart.itemsStart += items.length;
+		moreWrap.html(cart.itemsHasMore
+			? `<button type="button" class="ag-button ag-button-light ag-pos-item-more">${__("More")}</button>`
+			: "");
+	}
+
+	async addToPosCart(item) {
+		const cart = this.posCart;
+		const existing = cart.items.find((row) => row.item_code === item.item_code);
+		let available = item.actual_qty;
+		try {
+			const result = await frappe.call({
+				method: `${POS_INVOICE_METHOD}.get_stock_availability`,
+				args: { item_code: item.item_code, warehouse: cart.warehouse },
+			}).then((res) => res.message);
+			// [actual_qty, is_stock_item, allow_negative_stock]
+			if (Array.isArray(result)) [available] = result;
+		} catch (error) {
+			// stock could not be checked; let the add through rather than block the sale
+		}
+		const nextQty = (existing ? existing.qty : 0) + 1;
+		if (available !== undefined && available !== null && nextQty > available) {
+			frappe.show_alert({ message: __("Only {0} {1} available for {2}", [this.reportNumber(available), item.uom || "", item.item_name]), indicator: "orange" });
+			return;
+		}
+		if (existing) {
+			existing.qty += 1;
+		} else {
+			cart.items.push({ item_code: item.item_code, item_name: item.item_name, uom: item.uom, rate: item.rate || 0, qty: 1 });
+		}
+		this.renderPosCart();
+	}
+
+	changePosCartQty(itemCode, delta) {
+		const line = this.posCart.items.find((row) => row.item_code === itemCode);
+		if (!line) return;
+		this.setPosCartQty(itemCode, line.qty + delta);
+	}
+
+	setPosCartQty(itemCode, qty) {
+		const cart = this.posCart;
+		if (!(qty > 0)) {
+			this.removePosCartLine(itemCode);
+			return;
+		}
+		const line = cart.items.find((row) => row.item_code === itemCode);
+		if (line) { line.qty = qty; this.renderPosCart(); }
+	}
+
+	removePosCartLine(itemCode) {
+		this.posCart.items = this.posCart.items.filter((row) => row.item_code !== itemCode);
+		this.renderPosCart();
+	}
+
+	posCartTotals() {
+		const items = this.posCart.items;
+		const qty = items.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+		const net = items.reduce((sum, row) => sum + Number(row.qty || 0) * Number(row.rate || 0), 0);
+		return { qty, net };
+	}
+
+	renderPosCart() {
+		const cart = this.posCart;
+		const lines = this.wrapper.find(".ag-pos-cart-lines");
+		const rateEditable = cart.allowRateChange;
+		lines.html(cart.items.length
+			? cart.items.map((row) => `<div class="ag-pos-cart-line">
+					<div class="ag-pos-line-name">${this.escape(row.item_name || row.item_code)}<small>${this.escape(row.uom || "")}</small></div>
+					<div class="ag-pos-line-qty">
+						<button type="button" class="ag-pos-line-minus" data-item-code="${this.escape(row.item_code)}">&minus;</button>
+						<input type="number" min="0" step="any" class="ag-pos-line-qty-input" data-item-code="${this.escape(row.item_code)}" value="${row.qty}">
+						<button type="button" class="ag-pos-line-plus" data-item-code="${this.escape(row.item_code)}">+</button>
+					</div>
+					<div class="ag-pos-line-rate">${rateEditable
+						? `<input type="number" min="0" step="any" class="ag-pos-line-rate" data-item-code="${this.escape(row.item_code)}" value="${row.rate}">`
+						: this.reportMoney(row.rate)}</div>
+					<div class="ag-pos-line-amount">${this.reportMoney(Number(row.qty) * Number(row.rate))}</div>
+					<button type="button" class="ag-pos-line-remove" data-item-code="${this.escape(row.item_code)}" title="${__("Remove")}">${this.icon("delete", "xs")}</button>
+				</div>`).join("")
+			: `<div class="ag-pos-cart-empty">${__("No items in cart")}</div>`);
+		// the qty <input> above is re-rendered from renderPosCart itself, so its own
+		// change listener lives on the delegated content handler (bindPosCheckoutEvents),
+		// not here - this only ever redraws markup
+		this.wrapper.find(".ag-pos-cart-lines .ag-pos-line-qty-input").off("change.agposqty").on("change.agposqty", (event) => {
+			const input = $(event.currentTarget);
+			this.setPosCartQty(input.data("item-code"), Number(input.val()));
+		});
+		const totals = this.posCartTotals();
+		// reportMoney (frappe.format for Currency) returns a right-aligned <div>-wrapped
+		// string, not plain text - .html() renders it, .text() would print the tags literally
+		this.wrapper.find(".ag-pos-total-qty").text(this.reportNumber(totals.qty));
+		this.wrapper.find(".ag-pos-net-total").html(this.reportMoney(totals.net));
+		this.wrapper.find(".ag-pos-grand-total").html(this.reportMoney(totals.net));
+		this.wrapper.find(".ag-pos-checkout-btn").prop("disabled", !cart.items.length);
+	}
+
+	async openPosCheckoutPayment() {
+		const cart = this.posCart;
+		if (!cart.items.length) return;
+		if (!cart.customer) {
+			frappe.show_alert({ message: __("Please select a customer first"), indicator: "orange" });
+			return;
+		}
+
+		const content = this.wrapper.find(".ag-content");
+		const freeze = frappe.dom.freeze(__("Preparing invoice..."));
+		let doc;
+		try {
+			const payload = {
+				doctype: "POS Invoice",
+				is_pos: 1,
+				pos_profile: cart.posProfile,
+				company: cart.company,
+				customer: cart.customer,
+				selling_price_list: cart.priceList || undefined,
+				set_warehouse: cart.warehouse,
+				items: cart.items.map((row) => ({
+					item_code: row.item_code,
+					qty: row.qty,
+					rate: row.rate,
+					warehouse: cart.warehouse,
+				})),
+				// POS Invoice's own validate() requires at least one payments row to exist even
+				// before any amount is entered ("At least one mode of payment is required") -
+				// the actual split is only filled in once the payment step itself has totals.
+				payments: (cart.payments.length ? cart.payments : [{ mode_of_payment: (cart.profile.payments || [])[0]?.mode_of_payment }])
+					.map((row) => ({ mode_of_payment: row.mode_of_payment, amount: 0 })),
+			};
+			doc = cart.invoiceName
+				? await frappe.call({ method: "frappe.client.save", args: { doc: { ...payload, name: cart.invoiceName, docstatus: 0 } } }).then((res) => res.message)
+				: await frappe.call({ method: "frappe.client.insert", args: { doc: payload } }).then((res) => res.message);
+		} catch (error) {
+			frappe.dom.unfreeze();
+			frappe.msgprint({ title: __("Could not prepare invoice"), message: this.message(error), indicator: "red" });
+			return;
+		}
+		frappe.dom.unfreeze();
+		cart.invoiceName = doc.name;
+		cart.serverDoc = doc;
+		cart.step = "payment";
+		if (!cart.payments.length) cart.payments = [{ mode_of_payment: "Cash", amount: 0 }];
+		if (cart.payments.length === 1) cart.payments[0].amount = flt(doc.grand_total);
+
+		content.html(`<div class="ag-pos-payment">
+			<div class="ag-pos-payment-head">
+				<button type="button" class="ag-button ag-button-light ag-pos-payment-back">${this.icon("left", "xs")} ${__("Back to Cart")}</button>
+				<h2>${__("Checkout")} &middot; ${this.escape(doc.name)}</h2>
+			</div>
+			<div class="ag-pos-payment-summary">
+				<div><span>${__("Grand Total")}</span><b>${this.reportMoney(doc.grand_total)}</b></div>
+				<div class="ag-pos-payment-remaining"><span>${__("Remaining")}</span><b>${this.reportMoney(doc.grand_total)}</b></div>
+			</div>
+			<div class="ag-pos-payment-rows"></div>
+			<button type="button" class="ag-button ag-button-light ag-pos-payment-add-row">${__("Add Payment Method")}</button>
+			<button type="button" class="ag-button ag-button-primary ag-pos-payment-submit">${__("Complete Order")}</button>
+		</div>`);
+
+		content.off(".agpospay");
+		content.on("click.agpospay", ".ag-pos-payment-back", () => {
+			cart.step = "cart";
+			this.openPosCheckout(cart.posProfile, cart.openingEntry);
+		});
+		content.on("click.agpospay", ".ag-pos-payment-add-row", () => {
+			cart.payments.push({ mode_of_payment: "", amount: 0 });
+			this.renderPosPayment();
+		});
+		content.on("click.agpospay", ".ag-pos-payment-row-remove", (event) => {
+			cart.payments.splice(Number($(event.currentTarget).data("index")), 1);
+			this.renderPosPayment();
+		});
+		content.on("change.agpospay", ".ag-pos-payment-amount", (event) => {
+			const input = $(event.currentTarget);
+			cart.payments[Number(input.data("index"))].amount = flt(input.val());
+			this.renderPosPayment();
+		});
+		content.on("change.agpospay", ".ag-pos-payment-mode", (event) => {
+			const input = $(event.currentTarget);
+			cart.payments[Number(input.data("index"))].mode_of_payment = input.val();
+		});
+		content.on("click.agpospay", ".ag-pos-payment-submit", () => this.submitPosInvoice());
+
+		this.renderPosPayment();
+	}
+
+	renderPosPayment() {
+		const cart = this.posCart;
+		const modes = (cart.profile.payments || []).map((row) => row.mode_of_payment);
+		const rows = this.wrapper.find(".ag-pos-payment-rows");
+		rows.html(cart.payments.map((row, index) => `<div class="ag-pos-payment-row">
+				<select class="ag-pos-payment-mode" data-index="${index}">
+					<option value="">${__("Select")}</option>
+					${modes.map((mode) => `<option value="${this.escape(mode)}" ${mode === row.mode_of_payment ? "selected" : ""}>${this.escape(mode)}</option>`).join("")}
+				</select>
+				<input type="number" min="0" step="any" class="ag-pos-payment-amount" data-index="${index}" value="${row.amount}">
+				${cart.payments.length > 1 ? `<button type="button" class="ag-pos-payment-row-remove" data-index="${index}">${this.icon("delete", "xs")}</button>` : ""}
+			</div>`).join(""));
+		const paid = cart.payments.reduce((sum, row) => sum + flt(row.amount), 0);
+		const remaining = flt(cart.serverDoc.grand_total) - paid;
+		this.wrapper.find(".ag-pos-payment-remaining b").html(this.reportMoney(remaining));
+		this.wrapper.find(".ag-pos-payment-remaining").toggleClass("ag-pos-payment-over", remaining < -0.005);
+	}
+
+	async submitPosInvoice() {
+		const cart = this.posCart;
+		const partial = Boolean(cart.profile.allow_partial_payment);
+		// with partial payment on, a row is kept for the mode it names even when nothing
+		// was taken on it - that is how a sale goes out fully unpaid
+		const validRows = cart.payments.filter((row) => row.mode_of_payment
+			&& (partial || flt(row.amount) > 0));
+		if (!validRows.length) {
+			frappe.show_alert({ message: partial
+				? __("Please choose a mode of payment")
+				: __("Please enter at least one payment amount"), indicator: "orange" });
+			return;
+		}
+		const paid = validRows.reduce((sum, row) => sum + flt(row.amount), 0);
+		if (paid < flt(cart.serverDoc.grand_total) - 0.005 && !partial) {
+			frappe.show_alert({ message: __("Paid amount must cover the grand total"), indicator: "orange" });
+			return;
+		}
+
+		const freeze = frappe.dom.freeze(__("Submitting order..."));
+		let submitted;
+		try {
+			const saved = await frappe.call({
+				method: "frappe.client.save",
+				args: {
+					doc: {
+						...cart.serverDoc,
+						payments: validRows.map((row) => ({ mode_of_payment: row.mode_of_payment, amount: flt(row.amount) })),
+						// A POS Invoice is left out of the server's calculate_paid_amount and
+						// calculate_outstanding_amount (taxes_and_totals.py:877, :894), so these two
+						// are the till's to send - exactly as ERPNext's own does in pos_payment.js.
+						// Without them outstanding stays 0 and an unpaid sale is marked Paid.
+						paid_amount: paid,
+						base_paid_amount: paid * flt(cart.serverDoc.conversion_rate || 1),
+						// paying over the total is change owed, not a negative debt
+						outstanding_amount: Math.max(flt(cart.serverDoc.grand_total) - paid, 0),
+					},
+				},
+			}).then((res) => res.message);
+			submitted = await frappe.call({
+				method: "frappe.client.submit",
+				args: { doc: saved },
+			}).then((res) => res.message);
+		} catch (error) {
+			frappe.dom.unfreeze();
+			frappe.msgprint({ title: __("Could not submit order"), message: this.message(error), indicator: "red" });
+			return;
+		}
+		frappe.dom.unfreeze();
+		this.showPosOrderSummary(submitted);
+	}
+
+	showPosOrderSummary(doc) {
+		const cart = this.posCart;
+		const content = this.wrapper.find(".ag-content");
+		content.off(".agpospay").off(".agposcart");
+		content.html(`<div class="ag-pos-summary">
+			<span class="ag-pos-summary-icon">${this.icon("check", "lg")}</span>
+			<h1>${__("Order Complete")}</h1>
+			<p>${this.escape(doc.name)}</p>
+			<div class="ag-pos-summary-totals">
+				<div><span>${__("Grand Total")}</span><b>${this.reportMoney(doc.grand_total)}</b></div>
+				<div><span>${__("Paid Amount")}</span><b>${this.reportMoney(doc.paid_amount)}</b></div>
+			</div>
+			<div class="ag-pos-summary-actions">
+				<a class="ag-button ag-button-light" target="_blank" rel="noopener" href="/printview?doctype=POS%20Invoice&name=${encodeURIComponent(doc.name)}">${__("View / Print Invoice")}</a>
+				<button type="button" class="ag-button ag-button-primary ag-pos-new-sale">${__("New Sale")}</button>
+			</div>
+		</div>`);
+		content.off(".agpossummary").on("click.agpossummary", ".ag-pos-new-sale", () => {
+			this.openPosCheckout(cart.posProfile, cart.openingEntry);
+		});
+	}
+
 	promptNamed() {
 		// "Prompt" naming means the user types the document's name, the way the desk form
 		// puts a Name box at the top of a POS Profile
@@ -3272,7 +4948,7 @@ class AgriventurePortal {
 		};
 		for (const field of this.withPromptName(this.formMeta.fields)) {
 			if (field.fieldtype === "Tab Break") { pendingTab = field.label || frappe.model.unscrub(field.fieldname); pendingSection = null; pendingColumns = 0; continue; }
-			if (field.fieldtype === "Section Break") { pendingSection = { label: field.label, collapsible: field.collapsible, dependsOn: field.depends_on }; pendingColumns = 0; continue; }
+			if (field.fieldtype === "Section Break") { pendingSection = { label: field.label, collapsible: field.collapsible, dependsOn: field.depends_on || (SECTION_DEPENDS_ON[this.state.kind] || {})[field.fieldname] }; pendingColumns = 0; continue; }
 			if (field.fieldtype === "Column Break") {
 				if (pendingTab === null && pendingSection === null && currentGrid) addColumn();
 				else pendingColumns += 1;
@@ -3283,6 +4959,8 @@ class AgriventurePortal {
 			if (policy && !policy.fields.has(field.fieldname)) continue;
 			if (Number(this.formDoc?.docstatus || 0) !== 0
 				&& (HIDE_AFTER_SUBMIT[this.state.kind] || []).includes(field.fieldname)) continue;
+			if (!this.formDoc?.name
+				&& (HIDE_UNTIL_SAVED[this.state.kind] || []).includes(field.fieldname)) continue;
 			const unhidden = Boolean(policy && policy.unhide.has(field.fieldname));
 			const forced = (PORTAL_FORCE_VISIBLE[this.state.kind] || []).includes(field.fieldname);
 			if (field.hidden && !unhidden && !forced) continue;
@@ -3310,7 +4988,7 @@ class AgriventurePortal {
 			$(event.currentTarget).addClass("active");
 			panels.find(".ag-tab-panel").removeClass("active").filter(`[data-panel="${tab}"]`).addClass("active");
 		});
-		panels.on("click", ".ag-po-report", () => frappe.set_route("query-report", "Supplier Quotation Comparison"));
+		panels.on("click", ".ag-po-report", () => this.openQuotationComparison());
 		panels.on("click", ".ag-po-open", (event) => this.openReferenceLink($(event.currentTarget).data("link")));
 		const taxTemplate = this.formControls.find((entry) => entry.field.fieldname === "taxes_and_charges")?.control;
 		// Link control awesomplete-selectcomplete par abhi docname commit nahi karta —
@@ -3345,15 +5023,139 @@ class AgriventurePortal {
 				],
 				tables: { pos_invoices: ["pos_invoice", "posting_date", "grand_total"] },
 			},
-			// exactly what the desk form shows for a Material Receipt, nothing else
+			// A POS Invoice as the till wrote it. Read only, so this is a record to look at:
+			// who bought what, what was charged, and what actually settled it.
+			"pos-invoice": {
+				fields: [
+					// Details
+					"naming_series", "customer", "customer_name", "pos_profile",
+					"consolidated_invoice", "is_pos", "is_return", "return_against",
+					"company", "posting_date", "posting_time", "due_date",
+					// Accounting dimensions
+					"cost_center", "project",
+					// Currency
+					"currency", "selling_price_list",
+					// Warehouse and items
+					"set_warehouse", "update_stock", "items",
+					"total_qty", "total", "net_total",
+					// Taxes
+					"taxes_and_charges", "taxes", "total_taxes_and_charges",
+					// Discount
+					"apply_discount_on", "additional_discount_percentage", "discount_amount",
+					// Totals - outstanding sits here because it is what decides the status
+					"grand_total", "rounding_adjustment", "rounded_total",
+					"total_advance", "outstanding_amount",
+					// Payments - the modes the cashier actually entered
+					"payments", "paid_amount", "change_amount",
+					// Address & Contact
+					"customer_address", "address_display", "contact_person", "contact_display",
+					"shipping_address_name", "shipping_address", "territory",
+					// More Info
+					"status", "po_no", "po_date",
+				],
+				unhide: ["consolidated_invoice", "outstanding_amount", "status"],
+				tables: {
+					items: ["item_code", "qty", "uom", "rate", "amount", "warehouse"],
+					taxes: ["charge_type", "account_head", "rate", "tax_amount", "total"],
+					payments: ["mode_of_payment", "amount", "base_amount"],
+				},
+			},
+			// the desk's own Stock Entry form. The rest of what it carries - BOM, work
+			// order, subcontracting, job cards - belongs to manufacturing, which this
+			// workspace does not run, and the server fills every one of them itself.
 			"stock-entry": {
 				fields: [
-					"stock_entry_type", "company", "posting_date", "posting_time",
+					"naming_series", "stock_entry_type", "company",
+					// the checkbox is what lets the two beside it be typed on the desk form
+					"set_posting_time", "posting_date", "posting_time",
 					"inspection_required", "apply_putaway_rule",
+					// Default Warehouse: fills every row's source or target in one go
+					"from_warehouse", "to_warehouse",
 					"items",
 					"total_outgoing_value", "total_incoming_value", "value_difference",
+					// Accounting Dimensions tab
+					"project",
+					// Other Info tab: Printing Settings, then More Information. The read-only
+					// trackers beside them - per_transferred, job_card, total_amount - are
+					// manufacturing's, written by a work order rather than typed here.
+					"select_print_heading", "letter_head",
+					"is_opening", "remarks",
 				],
 				tables: { items: ["s_warehouse", "t_warehouse", "item_code", "qty", "uom", "basic_rate"] },
+			},
+			// Fuel bought in. amountffs is the rounded figure it bills on and aamountffs
+			// the exact one; both are read-only and filled as the two above them change.
+			// location_ffs and payment_entry_reference are left out: the first is hidden on
+			// the desk form too, and nothing writes the second (its Payment Entry code is
+			// commented out in fuel_for_stock.py).
+			"fuel-for-stock": {
+				fields: [
+					"date_ffs", "item", "company",
+					"vendor_name", "quantity_ffs",
+					"warehouse", "rateltr_ffs",
+					"aamountffs", "amountffs",
+					"upload_invoice__invoice_copy", "upload_fuel_station_proof__fuel_station_receipt",
+					"stock_entry_reference",
+				],
+			},
+			// Fuel issued out. diesel_in_stockltr is hidden on the desk form as well - it
+			// holds what the warehouse has, read from Bin, and only the save check uses it.
+			"fuel-for-distribution": {
+				fields: [
+					"date", "location", "company",
+					"item", "warehouse",
+					"fuel_distribution_to_vehicle", "issued_quantity_ltr", "purpose",
+					"stock_entry_reference",
+				],
+				tables: {
+					fuel_distribution_to_vehicle: ["vehicle_details", "last_readingkm",
+						"current_readingkm", "issued_quantity_ct"],
+				},
+			},
+			"vehicle-details": {
+				fields: [
+					"location_centre_vd", "vehicle_type", "make",
+					"license_plate", "model_name", "employee_name",
+					// the name is built from the three above it, exactly as vehicle_details.js
+					// builds it, and is what the record is named after
+					"vehicle_display_name",
+				],
+			},
+			// The desk's own Journal Entry. What is left off is ERPNext machinery this
+			// workspace has no screen for - a Write Off entry's Get Outstanding Invoices
+			// dialog, a template to pull rows from - or fields the server fills itself
+			// (the deferred-accounting, inter-company and reversal links).
+			// The desk's own New Account form. root_type and report_type are left off:
+			// both are read-only there and the server fills them from the parent, so a
+			// box for either would only ever sit blank and grey.
+			"account": {
+				fields: [
+					"disabled", "account_name", "account_number", "is_group",
+					"company", "account_currency",
+					"parent_account", "account_type", "tax_rate", "balance_must_be",
+				],
+			},
+			"journal-entry": {
+				fields: [
+					// Entry Type and Date
+					"voucher_type", "naming_series", "company", "posting_date",
+					// Accounting Entries
+					"accounts",
+					// the reference pair the server insists on for a Bank or Cash entry,
+					// and the two sides that have to meet before it will submit
+					"cheque_no", "cheque_date", "user_remark",
+					"total_debit", "total_credit", "difference", "multi_currency",
+					// Reference
+					"clearance_date", "remark", "bill_no", "bill_date", "due_date",
+					// Printing Settings
+					"pay_to_recd_from", "letter_head", "select_print_heading",
+					// More Information
+					"mode_of_payment", "is_opening",
+				],
+				tables: {
+					accounts: ["account", "party_type", "party",
+						"debit_in_account_currency", "credit_in_account_currency"],
+				},
 			},
 			"supplier-quotation": {
 				fields: [
@@ -3425,7 +5227,7 @@ class AgriventurePortal {
 				// shown for reference only - ERPNext fills these, the user never types them
 				readOnly: ["last_purchase_rate"],
 				tables: {
-					items: ["item_code", "schedule_date", "qty", "uom", "last_purchase_rate", "rate", "amount", "description"],
+					items: ["item_code", "schedule_date", "qty", "received_qty", "uom", "last_purchase_rate", "rate", "amount", "description"],
 					taxes: ["charge_type", "account_head", "rate", "tax_amount", "total"],
 				},
 			},
@@ -3483,8 +5285,10 @@ class AgriventurePortal {
 					"cost_center",
 					// Details - Currency and Price List
 					"currency", "use_transaction_date_exchange_rate", "buying_price_list", "ignore_pricing_rule",
-					// Details - Items
-					"update_stock", "is_subcontracted", "items", "total_qty", "total",
+					// Details - Items. update_stock is left off: an invoice raised here follows a
+					// Purchase Receipt, which has already taken the stock in, and ticking it would
+					// take it in a second time.
+					"is_subcontracted", "items", "total_qty", "total",
 					// Details - Taxes and Charges
 					"tax_category", "taxes_and_charges", "taxes",
 					"taxes_and_charges_added", "taxes_and_charges_deducted", "total_taxes_and_charges",
@@ -3521,6 +5325,33 @@ class AgriventurePortal {
 					payment_schedule: ["payment_term", "description", "due_date", "payment_amount"],
 				},
 			},
+			// A Payment Request as the desk lays it out: what is being asked for, from whom,
+			// against which document, and where the money should land.
+			"payment-request": {
+				fields: [
+					// Details
+					"payment_request_type", "naming_series", "transaction_date", "mode_of_payment", "company",
+					// Party Details - the reference is what ties it to an invoice or an order
+					"party_type", "party", "party_name", "reference_doctype", "reference_name",
+					// Transaction Details
+					"grand_total", "outstanding_amount", "currency", "party_account_currency",
+					"is_a_subscription", "subscription_plans",
+					// Bank Account Details - the read-only ones fill themselves from the bank account
+					"bank_account", "bank", "bank_account_no", "account", "iban", "branch_code", "swift_number",
+					// Accounting Dimensions
+					"cost_center", "project",
+					// Recipient and Message
+					"print_format", "email_to", "subject", "message", "mute_email", "payment_url",
+					// More Info
+					"status", "payment_order", "phone_number",
+				],
+				// status and outstanding are what the list column shows, so they are worth
+				// seeing on the form as well
+				unhide: ["status", "outstanding_amount"],
+				tables: {
+					subscription_plans: ["plan", "qty"],
+				},
+			},
 			"payment-entry": {
 				fields: [
 					// Type of Payment
@@ -3534,6 +5365,13 @@ class AgriventurePortal {
 					"paid_to", "paid_to_account_currency", "paid_to_account_balance",
 					// Amount - the exchange rates stay with ERPNext, which derives them on save
 					"paid_amount", "received_amount",
+					// What this payment settles, and how much of each. Saving is always allowed -
+					// it is Payment Entry.on_submit that throws "Difference Amount must be zero",
+					// so a draft can sit with 500 paid against a 1000 allocation and refuse only
+					// to submit. Paying 500 against a 1000 invoice means editing the Allocated
+					// cell down to 500, impossible without these rows on screen. The three totals
+					// below then say plainly what is still unmatched.
+					"references", "total_allocated_amount", "unallocated_amount", "difference_amount",
 					// Taxes and Charges - the template shown follows the party type
 					"sales_taxes_and_charges_template", "purchase_taxes_and_charges_template",
 					"apply_tax_withholding_amount", "tax_withholding_category", "taxes",
@@ -3552,6 +5390,8 @@ class AgriventurePortal {
 					received_amount: 'eval:doc.payment_type == "Internal Transfer" || doc.paid_from_account_currency != doc.paid_to_account_currency',
 				},
 				tables: {
+					references: ["reference_doctype", "reference_name", "due_date",
+						"total_amount", "outstanding_amount", "allocated_amount"],
 					taxes: ["charge_type", "account_head", "rate", "tax_amount", "total"],
 				},
 			},
@@ -3627,6 +5467,15 @@ class AgriventurePortal {
 		rowContext.data.uom = result.stock_uom;
 	}
 
+	// Item.description is a Text Editor; the grid shows Small Text, where markup would
+	// read as literal tags. This leaves the words the Desk grid renders.
+	plainText(value) {
+		if (!value) return "";
+		const holder = document.createElement("div");
+		holder.innerHTML = String(value);
+		return (holder.textContent || "").replace(/\s+/g, " ").trim();
+	}
+
 	async fillItemDefaults(rowContext) {
 		const code = rowContext.controls.item_code?.get_value();
 		if (!code) return;
@@ -3634,13 +5483,22 @@ class AgriventurePortal {
 		if (CALCULATED_KINDS.includes(this.state.kind)) return this.scheduleRecalculation();
 		let values;
 		try {
-			const response = await frappe.db.get_value("Item", code, ["stock_uom", "item_name"]);
+			const response = await frappe.db.get_value("Item", code, ["stock_uom", "item_name", "description"]);
 			values = response?.message || {};
 		} catch (error) {
 			return;
 		}
 		if (rowContext.controls.item_code?.get_value() !== code) return; // the row moved on already
 		if (values.item_name) rowContext.data.item_name = values.item_name;
+		// Specification: the same copy ERPNext makes in get_item_details.py:441. Written
+		// on every item change, which is what the Desk does too - a description typed by
+		// hand survives until the item itself is swapped.
+		const specification = this.plainText(values.description);
+		if (specification) {
+			rowContext.data.description = specification;
+			const control = rowContext.controls.description;
+			if (control) control.set_value(specification);
+		}
 		if (!values.stock_uom) return;
 		rowContext.data.stock_uom = values.stock_uom;
 		const uom = rowContext.controls.uom;
@@ -3713,9 +5571,12 @@ class AgriventurePortal {
 		const items = this.getLiveItemRows();
 		const names = (fieldname) => [...new Set(items.map((row) => row[fieldname]).filter(Boolean))];
 		this.referenceLinks = {
-			supplier_quotation: names("supplier_quotation"),
+			// the quotations the rows themselves name, plus the ones raised against the same
+			// requests but not chosen - those arrive from loadRequestQuotations below
+			supplier_quotation: [...new Set([...names("supplier_quotation"), ...(this.requestQuotations || [])])],
 			material_request: names("material_request"),
 		};
+		this.loadRequestQuotations();
 		const chip = (key, label) => {
 			const linked = this.referenceLinks[key];
 			return `<button type="button" class="ag-po-link ag-po-open" data-link="${key}" ${linked.length ? "" : "disabled"} title="${linked.length ? this.escape(linked.join(", ")) : `No ${label} linked`}"><b>${linked.length}</b> ${label}</button>`;
@@ -3723,6 +5584,60 @@ class AgriventurePortal {
 		// the comparison report only makes sense once there are quotations to compare
 		const quotations = this.referenceLinks.supplier_quotation.length;
 		return `<div class="ag-po-links">${chip("supplier_quotation", "Supplier Quotation")}${chip("material_request", "Material Request")}<button type="button" class="ag-po-link ag-po-report" ${quotations ? "" : "disabled"} title="${quotations ? "Compare supplier quotations" : "No Supplier Quotation linked"}">Supplier Quotation Comparison Report</button></div>`;
+	}
+
+	async loadRequestQuotations() {
+		// asked once per set of requests: the answer depends on nothing else
+		const requests = this.referenceLinks.material_request || [];
+		const key = requests.slice().sort().join("|");
+		if (!requests.length || this.requestQuotationsKey === key) return;
+		this.requestQuotationsKey = key;
+		try {
+			const found = await this.api.quotationsForRequests(requests);
+			const known = new Set(this.referenceLinks.supplier_quotation || []);
+			if (!(found || []).some((name) => !known.has(name))) return;
+			this.requestQuotations = found || [];
+			this.refreshPurchaseOrderLinks();
+		} catch (error) {
+			// the chip still shows what the rows themselves name
+			console.error(error);
+		}
+	}
+
+	async openQuotationComparison() {
+		// Opened from a Purchase Order, this report should be about THIS order's quotations.
+		// ERPNext's own defaults answer a different question - a rolling month, and expired
+		// quotations left out - so on an order of any age it showed either the wrong month or
+		// nothing at all. The quotations are named outright instead, and the window is
+		// stretched back to cover the oldest of them: a quotation is almost always older than
+		// the order it produced, so today alone would come back empty.
+		const quotations = (this.referenceLinks?.supplier_quotation || []).slice();
+		const options = {};
+		const company = this.getFormValue("company");
+		if (company) options.company = company;
+
+		if (quotations.length) {
+			options.supplier_quotation = quotations;
+			// a quotation past its Valid Till is exactly the history being looked at here
+			options.include_expired = 1;
+			let earliest = null;
+			try {
+				const rows = await frappe.db.get_list("Supplier Quotation", {
+					filters: { name: ["in", quotations] },
+					fields: ["transaction_date"],
+					order_by: "transaction_date asc",
+					limit: 1,
+				});
+				earliest = rows?.[0]?.transaction_date || null;
+			} catch (error) {
+				earliest = null; // fall back to the month below
+			}
+			options.from_date = earliest || frappe.datetime.add_months(frappe.datetime.get_today(), -1);
+			options.to_date = frappe.datetime.get_today();
+		}
+
+		frappe.route_options = options;
+		frappe.set_route("query-report", "Supplier Quotation Comparison");
 	}
 
 	openReferenceLink(key) {
@@ -3800,6 +5715,18 @@ class AgriventurePortal {
 		control.$input.on("change.agtaxcat awesomplete-selectcomplete.agtaxcat", (event) => {
 			if (!event.originalEvent) return;
 			this.applyTaxCategory(df.fieldname);
+		});
+	}
+
+	bindPartyDetails(control, df) {
+		// Picking a Supplier by hand should refresh its address/contact the way ERPNext's own
+		// buying forms do (erpnext.utils.get_party_details). Gated on event.originalEvent so
+		// opening an already-saved document never re-fetches and overwrites an address the
+		// user deliberately chose away from the supplier's default.
+		if (df.fieldname !== "supplier" || !control.$input) return;
+		control.$input.on("change.agparty awesomplete-selectcomplete.agparty", (event) => {
+			if (!event.originalEvent) return;
+			this.applyBuyingPartyDetails();
 		});
 	}
 
@@ -3904,6 +5831,208 @@ class AgriventurePortal {
 			react();
 			return result;
 		};
+	}
+
+	// ---------- fields that fill themselves ----------
+
+	// Frappe fills a `fetch_from` field the instant its source Link is picked. The server
+	// fills the very same fields again on save (base_document.py:830), so nothing that gets
+	// stored changes here - this only stops a form sitting blank until Save, which is what
+	// the Desk form never does. It matters most for the read-only ones: those cannot be
+	// typed, so until now they showed nothing at all until the document came back saved.
+	//
+	// Header fields only. A child row's fetch_from is already filled by the server's
+	// recalculate, which runs ERPNext's own set_missing_values over the whole document.
+	fetchTargets(sourceField) {
+		return ((this.formMeta && this.formMeta.fields) || []).filter((df) => df.fieldname
+			&& df.fetch_from && df.fetch_from.split(".")[0] === sourceField);
+	}
+
+	bindFetchFrom(control, df) {
+		if (df.fieldtype !== "Link" || !control.$input) return;
+		const targets = this.fetchTargets(df.fieldname);
+		if (!targets.length) return;
+		// same provenance-free test the other binders use: the form has finished rendering
+		// and the value has actually moved. A Link commits its docname a tick after its own
+		// select event, hence the setTimeout.
+		let known = control.get_value();
+		const react = () => {
+			const current = control.get_value();
+			if (!this.formReady || current === known) return;
+			known = current;
+			this.applyFetchFrom(df.options, current, targets);
+		};
+		control.$input.on("change.agfetch awesomplete-selectcomplete.agfetch blur.agfetch",
+			() => window.setTimeout(react, 0));
+		const previous = control.df.onchange;
+		control.df.onchange = function (...args) {
+			const result = previous ? previous.apply(this, args) : undefined;
+			react();
+			return result;
+		};
+	}
+
+	async applyFetchFrom(doctype, name, targets) {
+		if (!doctype) return;
+		if (!name) {
+			// clearing the source clears what was fetched from it, as the Desk form does
+			targets.forEach((target) => this.setFormValue(target.fieldname, ""));
+			return;
+		}
+		const wanted = [...new Set(targets.map((target) => target.fetch_from.split(".").slice(1).join(".")))];
+		const response = await frappe.db.get_value(doctype, name, wanted).catch(() => null);
+		const values = response && response.message;
+		if (!values) return;
+		// the answer can arrive after the user has moved on to another source
+		targets.forEach((target) => {
+			const source = target.fetch_from.split(".").slice(1).join(".");
+			if (!(source in values)) return;
+			// fetch_if_empty marks a fetched value as a mere default - Frappe leaves such a
+			// field alone once it holds something, so a typed value is never overwritten
+			if (target.fetch_if_empty && !target.read_only && this.formDoc[target.fieldname]) return;
+			this.setFormValue(target.fieldname, values[source] === null || values[source] === undefined ? "" : values[source]);
+		});
+	}
+
+	bindDerivedFields(control, df) {
+		const targets = (DERIVED_FIELDS[this.state.kind] || {})[df.fieldname];
+		if (!targets || !control.$input) return;
+		let known = control.get_value();
+		const filled = new Map();
+		const react = () => {
+			const current = control.get_value();
+			if (!this.formReady || current === known) return;
+			known = current;
+			if (!current) return;
+			targets.forEach((target) => {
+				const existing = this.formDoc[target];
+				// anything there that this rule did not put there is the user's own text, and
+				// the source stops driving the field for good once that happens
+				if (existing && existing !== filled.get(target)) return;
+				filled.set(target, current);
+				this.setFormValue(target, current);
+			});
+		};
+		control.$input.on("change.agderive awesomplete-selectcomplete.agderive blur.agderive",
+			() => window.setTimeout(react, 0));
+		// A typed Data field raises no change until it loses focus. ERPNext fills on that
+		// blur alone; watching keystrokes as well makes the name appear as it is typed,
+		// which the guard above makes safe.
+		control.$input.on("input.agderive", () => window.setTimeout(react, 0));
+		const previous = control.df.onchange;
+		control.df.onchange = function (...args) {
+			const result = previous ? previous.apply(this, args) : undefined;
+			react();
+			return result;
+		};
+	}
+
+	// ---------- "Create a new ..." stays inside this workspace ----------
+
+	// A Link's dropdown offers "Create a new X", and Frappe answers it with a quick-entry
+	// dialog only when the DocType is marked quick_entry - otherwise it calls set_route and
+	// the user lands on the Desk form (quick_entry.js:48). Most masters are not marked, so
+	// creating an Item Group or a Warehouse from here walked straight out of the workspace.
+	//
+	// Forcing the dialog keeps them here, and force has a second effect worth having: the
+	// "Edit Full Form" button is not rendered at all when it is set (quick_entry.js:137), so
+	// the dialog carries no way back out to the Desk either.
+	bindCreateNew(control, df) {
+		if (df.fieldtype !== "Link" || df.only_select || typeof control.new_doc !== "function") return;
+		// awesomplete stores `action: me.new_doc` when it builds the dropdown, and calls it
+		// with apply(control) - so replacing the property before any dropdown opens is enough,
+		// and an arrow function here simply ignores the `this` that gets applied.
+		const original = control.new_doc.bind(control);
+		control.new_doc = () => {
+			this.createFromLink(control, original);
+			return false;
+		};
+	}
+
+	// A dialog can only stand in for the form when it can actually hold every field the
+	// insert needs: no mandatory child table, at least one field to show, and no more than
+	// Frappe's own ceiling of seven (quick_entry.js:93). Anything heavier belongs on the
+	// workspace's own form, which is the themed place for it.
+	mandatoryFields(meta) {
+		return ((meta && meta.fields) || []).filter((field) => (field.reqd || field.allow_in_quick_entry)
+			&& !field.read_only && !field.is_virtual && field.fieldtype !== "Tab Break");
+	}
+
+	quickEntryFits(meta) {
+		if (!meta) return false;
+		const mandatory = this.mandatoryFields(meta);
+		// a mandatory child table cannot be filled in a dialog at all, whatever else is true
+		if (mandatory.some((field) => field.fieldtype === "Table")) return false;
+		// Frappe puts a __newname box in front of a prompt-named dialog (quick_entry.js:117),
+		// so such a dialog always has that one field to show even with nothing else mandatory
+		const prompt = String(meta.autoname || "").toLowerCase() === "prompt";
+		const count = mandatory.length + (prompt ? 1 : 0);
+		return count >= 1 && count <= 7;
+	}
+
+	// whichever field a new record is actually named by, so the half-typed text is not lost
+	nameFieldFor(meta) {
+		const autoname = String(meta.autoname || "");
+		if (autoname.toLowerCase() === "prompt") return "__newname";
+		if (autoname.startsWith("field:")) return autoname.slice(6).trim();
+		if (meta.title_field) return meta.title_field;
+		const stem = String(meta.name || "").toLowerCase().replace(/ /g, "_");
+		const named = [stem + "_name", stem + "_title"]
+			.find((fieldname) => (meta.fields || []).some((field) => field.fieldname === fieldname));
+		return named || null;
+	}
+
+	async createFromLink(control, original) {
+		const doctype = control.get_options && control.get_options();
+		if (!doctype) return;
+		const kind = this.kindForDoctype(doctype);
+		// not carried here - the Desk is the only place it exists, so Frappe's own path stands
+		if (!kind) { original(); return; }
+		const typed = control.get_label_value ? String(control.get_label_value() || "").trim() : "";
+		let meta = null;
+		try {
+			await new Promise((resolve) => frappe.model.with_doctype(doctype, resolve));
+			meta = frappe.get_meta(doctype);
+		} catch (error) {
+			console.error(error);
+		}
+		if (!this.quickEntryFits(meta)) {
+			await this.openPortalCreate(kind, doctype);
+			return;
+		}
+		// no _from_link: that is Frappe's route back from the Desk form, and there is no such
+		// trip any more. after_insert writes the new name into the link that asked for it.
+		frappe._from_link = null;
+		const entry = await frappe.ui.form.make_quick_entry(doctype,
+			(doc) => control.set_value(doc.name), null, null, true).catch((error) => {
+				console.error(error);
+				return null;
+			});
+		if (!entry || !entry.dialog) return;
+		// a failed insert otherwise falls back to open_doc, which routes to the Desk form
+		entry.skip_redirect_on_error = true;
+		// and if anything still reaches for the Desk, send it to this workspace instead
+		entry.open_doc = () => {
+			entry.dialog.hide();
+			this.openPortalCreate(kind, doctype);
+		};
+		// carry over what was already typed into the link
+		const nameField = this.nameFieldFor(meta);
+		const target = nameField && entry.dialog.fields_dict[nameField];
+		if (typed && target && !target.get_value()) target.set_value(typed);
+	}
+
+	async openPortalCreate(kind, doctype) {
+		// leaving a half-filled form is the user's call, not a side effect of a stray click
+		if (this.formDirty) {
+			const leave = await new Promise((resolve) => frappe.confirm(
+				__("This form has unsaved changes. Leave it and create a new {0}?", [__(doctype)]),
+				() => resolve(true), () => resolve(false)));
+			if (!leave) return;
+		}
+		this.state.kind = kind;
+		this.state.start = 0;
+		await this.openForm(null);
 	}
 
 	bindAddressFetch(control, df) {
@@ -4045,6 +6174,58 @@ class AgriventurePortal {
 		fill("party_bank_account", details.party_bank_account);
 		fill("bank_account", details.bank_account);
 		this.applyDependsOn();
+	}
+
+	async applyBuyingPartyDetails() {
+		// mirrors ERPNext's erpnext.utils.get_party_details for Supplier Quotation/Purchase
+		// Order/Purchase Receipt/Purchase Invoice: picking a supplier fills its address,
+		// contact and currency/tax defaults the same way the desk form does
+		const control = (fieldname) => this.formControls.find((entry) => entry.field.fieldname === fieldname)?.control;
+		const value = (fieldname) => String(control(fieldname)?.get_value() || "");
+		if (!control("supplier")) return;
+
+		const company = value("company");
+		const supplier = value("supplier");
+		const date = value("posting_date") || value("transaction_date");
+		if (!company || !supplier) return;
+
+		let details;
+		try {
+			const response = await frappe.call({
+				method: "erpnext.accounts.party.get_party_details",
+				args: {
+					party: supplier,
+					party_type: "Supplier",
+					company,
+					posting_date: date || undefined,
+					doctype: this.formMeta.doctype,
+				},
+			});
+			details = response.message;
+		} catch (error) {
+			return;
+		}
+		if (!details) return;
+
+		const fill = (fieldname, next) => {
+			const target = control(fieldname);
+			if (target && next !== undefined && next !== null) target.set_value(next);
+		};
+		fill("supplier_address", details.supplier_address);
+		fill("address_display", details.address_display);
+		fill("contact_person", details.contact_person);
+		fill("contact_display", details.contact_display);
+		fill("contact_email", details.contact_email);
+		fill("contact_mobile", details.contact_mobile);
+		fill("dispatch_address", details.dispatch_address);
+		fill("dispatch_address_display", details.dispatch_address_display);
+		fill("shipping_address", details.shipping_address);
+		fill("shipping_address_display", details.shipping_address_display);
+		fill("billing_address", details.billing_address);
+		fill("billing_address_display", details.billing_address_display);
+		fill("currency", details.currency);
+		fill("taxes_and_charges", details.taxes_and_charges);
+		fill("payment_terms_template", details.payment_terms_template);
 	}
 
 	applyPartyTypeDefault() {
@@ -4215,7 +6396,9 @@ class AgriventurePortal {
 		// A submitted or cancelled document is a record here. Its item rows still change,
 		// but only through Update Items, which goes through ERPNext's own checks - so the
 		// form itself has nothing left to save and every field stays closed.
-		if (Number(this.formDoc?.docstatus || 0) !== 0 || READ_ONLY_KINDS.includes(this.state.kind)) df.read_only = 1;
+		if (Number(this.formDoc?.docstatus || 0) !== 0 || this.formReadOnly()) df.read_only = 1;
+		// ...except the proof of purchase, which is the whole point of the exception
+		if (this.fuelAttachOpen(field.fieldname)) df.read_only = 0;
 		// an item that came from an upstream document cannot be swapped; a new row still can
 		if (rowContext && field.fieldname === "item_code"
 			&& (LINKED_ROW_FIELDS[this.state.kind] || []).some((fieldname) => rowContext.data[fieldname])) {
@@ -4239,14 +6422,22 @@ class AgriventurePortal {
 		this.scopeAttendanceLabour(control, df);
 		this.steadyLinkArrow(control, df);
 		if (!rowContext) this.bindParentRowField(control, df);
+		if (!rowContext) this.bindFetchFrom(control, df);
+		this.bindCreateNew(control, df);
+		if (!rowContext) this.bindDerivedFields(control, df);
+		if (!rowContext) this.bindFuelFields(control, df);
 		this.bindAddressFetch(control, df);
 		this.bindDiscountFields(control, df);
 		this.bindTaxCategory(control, df);
+		this.bindPartyDetails(control, df);
+		this.scopeModeOfPayment(control, df);
 		this.scopeShiftCentre(control, df);
 		this.bindShiftField(control, df);
 		this.bindAttendanceField(control, df);
+		this.bindFullName(control, df);
 		this.scopeCropLinks(control, df);
 		this.bindCropField(control, df);
+		this.bindPosProfileBalance(control, df);
 		this.bindPosOpeningFetch(control, df);
 		this.linkPortalDoc(control, df);
 		this.bindComboSearch(control, field.label);
@@ -4455,6 +6646,36 @@ class AgriventurePortal {
 		this.openForm(name);
 	}
 
+	bindPosProfileBalance(control, df) {
+		if (this.state.kind !== "pos-opening-entry" || df.fieldname !== "pos_profile") return;
+		if (!control.$input) return;
+		// a saved shift keeps whatever it was opened with; only a new one is filled in
+		control.$input.on("change.agposbal awesomplete-selectcomplete.agposbal blur.agposbal", () => {
+			if (this.formDoc.name) return;
+			const profile = control.get_value();
+			if (!profile || profile === this.posProfileLoaded) return;
+			this.posProfileLoaded = profile;
+			this.fillOpeningBalance(profile);
+		});
+	}
+
+	async fillOpeningBalance(profile) {
+		let payments;
+		try {
+			payments = (await frappe.db.get_doc("POS Profile", profile)).payments || [];
+		} catch (error) {
+			this.posProfileLoaded = null;
+			return; // a profile that will not load is not worth an interruption here
+		}
+		// the row moved on to another profile while this was in flight
+		if (this.formControl("pos_profile")?.get_value() !== profile) return;
+		this.replaceChildRows("balance_details", payments.map((row) => ({
+			mode_of_payment: row.mode_of_payment,
+			// the float is counted by the cashier, so it starts at nothing
+			opening_amount: 0,
+		})));
+	}
+
 	bindPosOpeningFetch(control, df) {
 		if (this.state.kind !== "pos-closing-entry" || df.fieldname !== "pos_opening_entry" || !control.$input) return;
 		// Awesomplete raises its own event, which carries no originalEvent, so the shift is
@@ -4580,7 +6801,7 @@ class AgriventurePortal {
 	lockChildTables(content) {
 		// Once submitted, the row set is part of the record. The fields were already
 		// read-only; the two buttons that change the row count go as well.
-		if (Number(this.formDoc?.docstatus || 0) === 0 && !READ_ONLY_KINDS.includes(this.state.kind)) return;
+		if (Number(this.formDoc?.docstatus || 0) === 0 && !this.formReadOnly()) return;
 		content.find(".ag-add-row, .ag-add-multiple, .ag-remove-row, .ag-upload-rows").remove();
 	}
 
@@ -4737,7 +6958,7 @@ class AgriventurePortal {
 						// the link value behind the name, carried through but never shown
 						{ fieldtype: "Data", fieldname: "name_of_person_al", hidden: 1 },
 						{ fieldtype: "Link", fieldname: "name_of_field_lal", label: __("Field Name"), options: "Field Details", in_list_view: 1, columns: 2 },
-						{ fieldtype: "Link", fieldname: "task_name_lal", label: __("Task Name"), options: "Category Details", in_list_view: 1, columns: 3 },
+						{ fieldtype: "Link", fieldname: "task_name_lal", label: __("Task Name"), options: "Category Master", in_list_view: 1, columns: 3 },
 						{ fieldtype: "Time", fieldname: "start_time_lal", label: __("Start Time"), in_list_view: 1, columns: 2 },
 					],
 				},
@@ -4759,8 +6980,30 @@ class AgriventurePortal {
 			} catch (error) {
 				rows = [];
 			}
+			// get_attendance_logs (agriventure_nagpur_erp) hands back only the Labour
+			// Information ID in name_of_person_al - never a display name - so the Employee
+			// column needs its own lookup here, one batch call rather than one per row.
+			const ids = [...new Set(rows.map((row) => row.name_of_person_al).filter(Boolean))];
+			let names = {};
+			if (ids.length) {
+				try {
+					const people = await frappe.db.get_list("Labour Information", {
+						filters: { name: ["in", ids] },
+						fields: ["name", "name_of_person"],
+						limit: ids.length,
+					});
+					names = Object.fromEntries(people.map((person) => [person.name, person.name_of_person]));
+				} catch (error) {
+					names = {};
+				}
+			}
 			const now = frappe.datetime.now_time();
-			grid.df.data = rows.map((row) => ({ ...row, start_time_lal: row.start_time_lal || now, __checked: 0 }));
+			grid.df.data = rows.map((row) => ({
+				...row,
+				person_name: names[row.name_of_person_al] || row.name_of_person_al || "",
+				start_time_lal: row.start_time_lal || now,
+				__checked: 0,
+			}));
 			grid.refresh();
 			if (!rows.length) {
 				frappe.show_alert({ message: __("No attendance logged at {0} on this date", [source]), indicator: "orange" });
@@ -4801,7 +7044,7 @@ class AgriventurePortal {
 				title: __("Assign Task"),
 				fields: [
 					{ fieldtype: "Link", fieldname: "field", label: __("Field"), options: "Field Details", reqd: 1 },
-					{ fieldtype: "Link", fieldname: "task", label: __("Task"), options: "Category Details", reqd: 1 },
+					{ fieldtype: "Link", fieldname: "task", label: __("Task"), options: "Category Master", reqd: 1 },
 					{ fieldtype: "Time", fieldname: "time", label: __("Start Time"), reqd: 1 },
 				],
 				primary_action_label: __("Submit"),
@@ -4947,12 +7190,27 @@ class AgriventurePortal {
 		control.$link_open.on("mousedown.aglink", (event) => event.preventDefault());
 	}
 
+	scopeModeOfPayment(control, df) {
+		// A mode without an account for this company can be picked today and then
+		// refuses to save ("Please set default Cash or Bank account in Mode of Payments
+		// ..."). Both of these forms run that same check, so both are given the list of
+		// modes that will actually go through.
+		if (df.fieldname !== "mode_of_payment") return;
+		if (!["pos-profile", "pos-opening-entry"].includes(this.state.kind)) return;
+		control.get_query = () => ({
+			query: "agriventure.portal_extras.modes_for_company",
+			// read at search time, not now: the company may still be empty while the
+			// form is being drawn, and is often chosen after the first row is added
+			filters: { company: this.getFormValue("company") },
+		});
+	}
+
 	scopeShiftCentre(control, df) {
 		// only centres that actually have attendance logged on the chosen date, which is
 		// the same link query the desk form uses
 		if (this.state.kind !== "shift-details" || df.fieldname !== "centre__location_sd") return;
 		control.get_query = () => ({
-			query: `${SHIFT_METHOD}.get_today_centres`,
+			query: `agriventure.portal_extras.get_today_centres`,
 			filters: { date: this.getFormValue("date_sd") },
 		});
 	}
@@ -5059,7 +7317,13 @@ class AgriventurePortal {
 		}
 
 		if (df.fieldname !== "name_of_person_al") return;
-		later(() => {
+		// ---- superseded by Face Attendance, kept on record --------------------
+		// Picking a person used to open the camera and check that one face. The face
+		// screen on the list does the same check without the two pickers in front of
+		// it, so this no longer runs. The form itself is untouched: it is still how
+		// somebody with no usable photo gets marked, and uncommenting the block below
+		// brings the old behaviour back exactly as it was.
+		if (!FACE_ATTENDANCE_ONLY) later(() => {
 			if (!moved()) return;
 			const person = control.get_value();
 			// one camera per newly picked person, not one per keystroke
@@ -5072,6 +7336,32 @@ class AgriventurePortal {
 			this.attendanceLastPerson = person;
 			this.runAttendanceLogin(person);
 		});
+	}
+
+	bindFullName(control, df) {
+		// Labour Information's own client script (labour_information.js, which this portal
+		// does not load) builds Name of Person from these three on every edit, capitalizing
+		// each one's first letter along the way. Reproduced here so a record created through
+		// the portal reads the same as one created through the desk - and so Name of Person,
+		// which the doctype requires, is never left blank the way it was before this existed.
+		if (this.state.kind !== "labour-details" || !["first_name", "middle_name", "last_name"].includes(df.fieldname) || !control.$input) return;
+		control.$input.on("change.agfullname", (event) => {
+			if (!event.originalEvent) return;
+			this.applyFullName();
+		});
+	}
+
+	applyFullName() {
+		const control = (fieldname) => this.formControls.find((entry) => entry.field.fieldname === fieldname)?.control;
+		const capitalize = (value) => value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : value;
+		const parts = ["first_name", "middle_name", "last_name"].map((fieldname) => {
+			const target = control(fieldname);
+			if (!target) return "";
+			const capitalized = capitalize(target.get_value() || "");
+			if (capitalized !== target.get_value()) target.set_value(capitalized, true);
+			return capitalized;
+		});
+		control("name_of_person")?.set_value(parts.filter(Boolean).join(" "), true);
 	}
 
 	checkAttendanceDate(control) {
@@ -5094,7 +7384,354 @@ class AgriventurePortal {
 	}
 
 	// One camera dialog, shared by login and logout. onCapture gets the jpeg data url.
-	openFaceDialog(title, actionLabel, onCapture) {
+	// ---- Face attendance -----------------------------------------------------
+	//
+	// The desk form asks the centre and the name and then checks one face. This asks
+	// the face: one scan, and both answers fall out of it. The form is untouched and
+	// is still how anyone without a usable photo gets marked.
+
+	setFaceStatus(panel, text, tone) {
+		panel.find(".ag-face-status").attr("data-tone", tone || "muted").text(text);
+	}
+
+	renderFacePrepared(panel, prepared, coords) {
+		// the reading, always - a centre named with no distance beside it is what made
+		// a missing GPS look like a real answer
+		const reading = coords
+			? __("GPS {0}, {1}", [Number(coords.latitude).toFixed(5), Number(coords.longitude).toFixed(5)])
+			: __("no GPS reading");
+		const away = (meters) => meters === null || meters === undefined
+			? ""
+			: meters > 2000 ? __(" - {0} km away", [(meters / 1000).toFixed(0)])
+				: __(" - {0} m away", [Math.round(meters)]);
+
+		const select = panel.find(".ag-face-centre-pick");
+		const centres = prepared?.centres || [];
+		if (centres.length && !select.find("option").length) {
+			select.html(`<option value="">${__("Pick a centre")}</option>`
+				+ centres.map((name) => `<option value="${this.escape(name)}">${this.escape(name)}</option>`).join(""));
+		}
+		if (prepared?.centre) select.val(prepared.centre);
+
+		if (!prepared?.ok) {
+			// nobody can be identified without a centre, so the scan is not offered - it
+			// would only compare the face against a list it was never going to be in
+			const near = prepared?.nearest
+				? __(" - nearest {0}{1}", [prepared.nearest, away(prepared.distance_meter)])
+				: "";
+			this.setFaceStatus(panel,
+				`${prepared?.message || __("Could not work out the centre.")} (${reading}${near})`,
+				"red");
+			return;
+		}
+
+		// The nearest centre is never named here. It is only a hint, and each person's
+		// attendance goes to their own posted centre instead - naming the nearest one
+		// made a scan that went to Chhindwara look like it had gone to Saikheda.
+		// no count, no greeting: an empty line until there is something to report
+		this.setFaceStatus(panel, "", "muted");
+		// A photo that will not encode is still worth knowing about, but not as a
+		// popup over the camera every time it opens - it covered the frame and said
+		// the same thing on every scan. face_attendance_readiness() has the list
+		// whenever it is actually wanted.
+	}
+
+	async openFaceAttendance() {
+		const marked = [];
+		// the Scan button fired twice in a tenth of a second and wrote two logs for
+		// one person; a scan already on its way is not started again
+		let scanning = false;
+		let prepared = null;
+		let coords = null;
+
+		// named, so the same handler serves the button and the watcher below
+		const handle = async (imageData) => {
+			const panel = dialog.fields_dict.camera_html.$wrapper;
+			const say = (text, tone) => panel.find(".ag-face-status")
+				.attr("data-tone", tone || "muted").text(text);
+			// no centre needed to scan: every reference face on the site is in the
+			// running, and where they work is read off the person afterwards
+			if (!prepared?.ok) {
+				return say(prepared?.message || __("No faces are on file yet."), "red");
+			}
+			if (scanning) return;
+			scanning = true;
+			// last scan's names must not sit there looking like this scan's answer
+			panel.find(".ag-face-choices").attr("hidden", "hidden").empty();
+			say(__("Checking..."), "muted");
+
+			let result;
+			try {
+				result = await frappe.xcall("agriventure.portal_extras.face_mark_attendance", {
+					captured_image: imageData,
+					latitude: coords?.latitude,
+					longitude: coords?.longitude,
+					centre: prepared?.centre,
+				});
+			} catch (error) {
+				console.error(error);
+				say(this.message(error), "red");
+				return;
+			} finally {
+				scanning = false;
+			}
+
+			this.showFaceResult(dialog, result, marked, imageData, coords, prepared);
+		};
+
+		const dialog = this.openFaceDialog(__("Face Attendance"), __("Next"), handle, true);
+
+		const panel = dialog.fields_dict.camera_html.$wrapper;
+		panel.prepend(`<div class="ag-face-status" data-tone="muted">${__("Starting camera...")}</div>`);
+		// hidden: the centre comes off each person's own record, so a control asking
+		// for one only reads as a step that has to be done first. It is revealed by
+		// the one case that cannot be settled - somebody posted to several farms.
+		panel.append(`<div class="ag-face-centre" hidden>
+				<label>${__("Centre")}</label><select class="ag-face-centre-pick"></select>
+			</div>
+			<div class="ag-face-choices" hidden></div>
+			<div class="ag-face-marked"><b>${__("Marked in this session")}</b><ol></ol></div>`);
+
+		// GPS is a suggestion here, not the last word: a reading the device could not
+		// take reads as 0,0, and the centre nearest to 0,0 is a real centre - so it
+		// comes back looking like an answer. Whoever is running the camera can say.
+		panel.find(".ag-face-centre-pick").on("change", async (event) => {
+			const chosen = event.target.value;
+			if (!chosen) { prepared = null; return; }
+			this.setFaceStatus(panel, __("Loading {0}...", [chosen]), "muted");
+			try {
+				prepared = await frappe.xcall("agriventure.portal_extras.face_attendance_prepare", { centre: chosen });
+			} catch (error) {
+				console.error(error);
+				return this.setFaceStatus(panel, this.message(error), "red");
+			}
+			this.renderFacePrepared(panel, prepared, coords);
+		});
+
+		// ---- it scans by itself ----------------------------------------------
+		//
+		// Nothing here recognises a face - that is the server's job. This only watches
+		// how much the middle of the picture is changing, which is enough to tell
+		// somebody stepping up from an empty room: a big change, then stillness.
+		//
+		// There was a guide box drawn over the video whose corners went green at that
+		// moment. It is commented out below rather than deleted - it cost a wait that
+		// bought nothing, since it could only ever report what the watcher already
+		// knew, and the name coming back a moment later says the same thing.
+
+		const video = dialog.video_element;
+		// const stage = $('<div class="ag-face-stage"></div>').insertBefore(video);
+		// stage.append(video);
+		// const guide = $('<div class="ag-face-guide" data-state="wait">'
+		//     + '<i></i><i></i><i></i><i></i></div>').appendTo(stage);
+
+		// the part of the picture that is watched, as a fraction of it - the middle,
+		// so somebody walking past the edge of the frame does not set it off
+		const BOX = { x: 0.22, y: 0.13, w: 0.56, h: 0.70 };
+		// mean change per pixel, 0-255: above MOVED somebody is arriving or leaving,
+		// below STILL the picture has settled
+		const MOVED = 7;
+		const STILL = 2.5;
+		// the long edge of the frame that is sent - see the note above the capture
+		const SEND_EDGE = 800;
+
+		const sampler = document.createElement("canvas");
+		sampler.width = 64;
+		sampler.height = 48;
+		const sctx = sampler.getContext("2d", { willReadFrequently: true });
+		let previous = null;
+		// "clear" nobody there, "arriving" something moved, "spent" just scanned
+		let watch = "clear";
+
+		const change = () => {
+			if (!video || video.readyState !== 4 || !video.videoWidth) return null;
+			sctx.drawImage(video,
+				video.videoWidth * BOX.x, video.videoHeight * BOX.y,
+				video.videoWidth * BOX.w, video.videoHeight * BOX.h,
+				0, 0, 64, 48);
+			const now = sctx.getImageData(0, 0, 64, 48).data;
+			if (!previous) { previous = now; return null; }
+			let total = 0;
+			// one channel is plenty for 'how different is this picture'
+			for (let index = 0; index < now.length; index += 4) {
+				total += Math.abs(now[index] - previous[index]);
+			}
+			previous = now;
+			return total / (64 * 48);
+		};
+
+		// 120ms and a single quiet sample. Two samples are needed to see somebody
+		// arrive and stop, so the tick is half the wait before a scan starts: 400ms
+		// with two quiet samples read as a camera that was not working, 250ms still
+		// cost half a second. The sample is 64x48 - taking it more often is free.
+		const watcher = window.setInterval(async () => {
+			const moved = change();
+			if (moved === null || scanning) return;
+
+			// scanned already: nothing more happens until this person steps away
+			if (watch === "spent") {
+				if (moved > MOVED) watch = "clear";
+				return;
+			}
+			if (moved > MOVED) { watch = "arriving"; return; }
+			if (watch !== "arriving" || moved > STILL) return;
+
+			watch = "spent";
+			// scaled down on the way out: the detector's time is the frame's size, and a
+			// frame bigger than the reference photos cannot match any better
+			const shrink = Math.min(1,
+				SEND_EDGE / Math.max(video.videoWidth, video.videoHeight));
+			const canvas = document.createElement("canvas");
+			canvas.width = Math.round(video.videoWidth * shrink);
+			canvas.height = Math.round(video.videoHeight * shrink);
+			canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+			await handle(canvas.toDataURL("image/jpeg", 0.8));
+		}, 120);
+
+		// the stream and the watcher both stop with the dialog, however it is closed
+		const closeDialog = dialog.onhide;
+		dialog.onhide = () => {
+			window.clearInterval(watcher);
+			if (closeDialog) closeDialog();
+		};
+
+		// ---- the button moves the queue on, it does not take the picture -----
+		//
+		// The camera fires by itself, so a Scan button had nothing left to do -
+		// pressing it only photographed somebody already dealt with. Next clears
+		// the last answer and puts the watcher back to waiting, so whoever steps
+		// up after this person is the one scanned.
+		dialog.set_primary_action(__("Next"), () => {
+			panel.find(".ag-face-choices").attr("hidden", "hidden").empty();
+			watch = "clear";
+			// the last frame is forgotten too, so the next sample is a baseline and
+			// not a difference against whoever was standing here before
+			previous = null;
+			this.renderFacePrepared(panel, prepared, coords);
+		});
+
+		// the location and the centre's faces are both wanted before anyone steps up,
+		// so the first scan does not pay for either
+		try {
+			coords = (await this.getPosition()).coords;
+		} catch (error) {
+			console.error(error);
+		}
+		try {
+			prepared = await frappe.xcall("agriventure.portal_extras.face_attendance_prepare", {
+				latitude: coords?.latitude,
+				longitude: coords?.longitude,
+			});
+		} catch (error) {
+			console.error(error);
+			prepared = { ok: false, message: this.message(error) };
+		}
+
+		this.renderFacePrepared(panel, prepared, coords);
+		return dialog;
+	}
+
+	showFaceResult(dialog, result, marked, imageData, coords, prepared) {
+		const panel = dialog.fields_dict.camera_html.$wrapper;
+		const status = panel.find(".ag-face-status");
+		const choices = panel.find(".ag-face-choices").attr("hidden", "hidden").empty();
+		const say = (text, tone) => status.attr("data-tone", tone).text(text);
+		// seconds are enough to read - the microseconds the server sends are cut
+		const clock = (value) => String(value || "").split(".")[0];
+
+		if (result?.ok) {
+			// One scan does both: the first of the day marks in, the next marks out.
+			// Nobody at the camera has to say which - the line just reports what it did.
+			const out = result.action === "logout";
+			const line = out
+				? __("{0} - {1} - Logout successful", [result.centre, result.labour_name])
+				: __("{0} - {1} - Login successful", [result.centre, result.labour_name]);
+			// on the way out the hours are the thing worth reading back
+			const detail = out
+				? [clock(result.log_out), __("worked {0}", [result.working_hours ?? "-"]), result.leave]
+					.filter(Boolean).join(" - ")
+				: clock(result.log_in);
+			say(`${line} - ${detail}`, "green");
+			frappe.show_alert({ message: line, indicator: out ? "blue" : "green" });
+			marked.unshift({ ...result,
+				when: clock(out ? result.log_out : result.log_in),
+				note: out ? __("out") : __("in") });
+			panel.find(".ag-face-marked ol").html(marked.map((row) =>
+				`<li>${this.escape(row.labour_name)} <small>${this.escape(row.centre)} - ${this.escape(row.note)} ${this.escape(row.when)}</small></li>`).join(""));
+			return;
+		}
+
+		// Most people here are posted to four farms, so the face alone cannot say which
+		// one today is. Tapping it once sets the camera to that farm, and everyone else
+		// posted there goes through without being asked again.
+		// two different reasons, one answer: tap where you are. "centre_choice" is
+		// somebody posted to several farms; "no_centre" is somebody posted to none,
+		// and there every centre is offered so the queue is not held up by a master
+		// that has not been filled in yet.
+		if (["centre_choice", "no_centre"].includes(result?.code) && result.centres?.length) {
+			say(result.message, "orange");
+			// the buttons below are the answer, and they are already narrowed to this
+			// person's own centres - the dropdown offered all eight, so it is left
+			// hidden. Uncomment to bring it back.
+			// panel.find(".ag-face-centre").removeAttr("hidden");
+			choices.removeAttr("hidden").html(result.centres.map((name) =>
+				`<button type="button" class="ag-button ag-button-light" data-centre="${this.escape(name)}">${this.escape(name)}</button>`).join(""));
+			choices.find("button").on("click", async (event) => {
+				const chosen = $(event.currentTarget).data("centre");
+				// remembered for the rest of the session - this is the farm we are standing at
+				if (prepared) prepared.centre = chosen;
+				panel.find(".ag-face-centre-pick").val(chosen);
+				say(__("Checking..."), "muted");
+				try {
+					const again = await frappe.xcall("agriventure.portal_extras.face_mark_attendance", {
+						captured_image: imageData,
+						latitude: coords?.latitude,
+						longitude: coords?.longitude,
+						// as a decision, not a hint: this is the only thing that can settle a
+						// centre for somebody whose record does not name one
+						chosen_centre: chosen,
+					});
+					this.showFaceResult(dialog, again, marked, imageData, coords, prepared);
+				} catch (error) {
+					console.error(error);
+					say(this.message(error), "red");
+				}
+			});
+			return;
+		}
+
+		// a tie the scan could not settle: the names it had in mind, for a person to pick
+		if (result?.code === "not_confident" && result.candidates?.length) {
+			say(result.message, "orange");
+			choices.removeAttr("hidden").html(result.candidates.map((row) =>
+				`<button type="button" class="ag-button ag-button-light" data-labour="${this.escape(row.labour)}">${this.escape(row.labour_name)}</button>`).join(""));
+			choices.find("button").on("click", async (event) => {
+				const labour = $(event.currentTarget).data("labour");
+				say(__("Checking..."), "muted");
+				try {
+					// the same frame, re-checked - the tap settles the tie, it does not skip
+					// the match: the server still refuses a name the scan never put forward
+					const again = await frappe.xcall("agriventure.portal_extras.face_mark_attendance", {
+						captured_image: imageData,
+						latitude: coords?.latitude,
+						longitude: coords?.longitude,
+						centre: prepared?.centre,
+						labour,
+					});
+					this.showFaceResult(dialog, again, marked, imageData, coords, prepared);
+				} catch (error) {
+					console.error(error);
+					say(this.message(error), "red");
+				}
+			});
+			return;
+		}
+
+		// already marked is not a failure, it is an answer - a different colour says so
+		say(result?.message || __("Face did not match."), result?.code === "already_marked" ? "orange" : "red");
+	}
+
+	openFaceDialog(title, actionLabel, onCapture, keepOpen = false) {
 		let facingMode = "user";
 		const dialog = new frappe.ui.Dialog({
 			title,
@@ -5111,7 +7748,9 @@ class AgriventurePortal {
 				canvas.height = video.videoHeight;
 				canvas.getContext("2d").drawImage(video, 0, 0);
 				const imageData = canvas.toDataURL("image/jpeg", 0.8);
-				stopCamera();
+				// a queue keeps the stream running - stopping it between people is most of
+				// the wait, and the next person is already standing there
+				if (!keepOpen) stopCamera();
 				onCapture(imageData, dialog);
 			},
 		});
@@ -5439,7 +8078,10 @@ class AgriventurePortal {
 				await this.saveForm(false);
 				// the log has a name only now, so the live frame is attached to it here -
 				// failing to keep the photo must not undo an attendance that was accepted
-				if (this.formDoc.name) {
+				// image_of_person on this site is fetch_from the person's master photo, and there
+				// is no separate field for the live frame - so there is nowhere to keep it and
+				// the portal does not pretend otherwise.
+				if (SAVE_LOGIN_PHOTO && this.formDoc.name) {
 					try {
 						await frappe.call({
 							method: `${ATTENDANCE_METHOD}.save_login_photo`,
@@ -5516,6 +8158,162 @@ class AgriventurePortal {
 				});
 			}
 		});
+	}
+
+	// ---- Transport -----------------------------------------------------------
+	//
+	// Everything below mirrors agriventure_nagpur_erp's own two form scripts: the same
+	// filters, the same arithmetic, the same stock check, and its own two whitelisted
+	// methods called as they are. Nothing in that app is touched.
+
+	// With no fieldname: does this form have anything left that can be filled in at all.
+	// With one: is that the field. Used both to unlock the control and to keep Save on
+	// screen for a document that is otherwise a record.
+	fuelAttachOpen(fieldname = null) {
+		if (this.state.kind !== "fuel-for-stock" || !this.formDoc?.name) return false;
+		return fieldname === null || FUEL_ATTACH_FIELDS.includes(fieldname);
+	}
+
+	fuelValue(fieldname) {
+		const live = this.formControl(fieldname)?.get_value();
+		if (this.hasValue(live)) return live;
+		// not typed yet - the same default renderControl is in the middle of applying
+		const field = (this.formMeta?.fields || []).find((entry) => entry.fieldname === fieldname);
+		return (field ? this.defaultValue(field, this.formDoc[fieldname]) : this.formDoc[fieldname]) || "";
+	}
+
+	renderFuelStockCard(content) {
+		if (!FUEL_LOCKED_KINDS.includes(this.state.kind)) return;
+		this.fuelAvailable = null;
+		const panel = $('<div class="ag-fuel-stock" hidden></div>').insertAfter(content.find(".ag-form-head"));
+		this.drawFuelStock = async () => {
+			const warehouse = this.fuelValue("warehouse");
+			if (!warehouse) return void panel.attr("hidden", "hidden").empty();
+			let stock;
+			try {
+				stock = await frappe.xcall(FUEL_STOCK_METHOD, { warehouse });
+			} catch (error) {
+				// not worth interrupting the form over, but not worth hiding either
+				console.error("fuel stock card", error);
+				return void panel.attr("hidden", "hidden").empty();
+			}
+			if (this.fuelValue("warehouse") !== warehouse) return; // moved on already
+			const tile = (fuel) => {
+				const litres = flt((stock || {})[fuel]);
+				return `<div class="ag-fuel-tile${litres < FUEL_FLOOR[fuel] ? " is-low" : ""}"><span>${__(fuel)}</span><b>${litres} L</b></div>`;
+			};
+			panel.html(`<div class="ag-fuel-stock-head">${__("Stock in {0}", [this.escape(warehouse)])}</div><div class="ag-fuel-stock-grid">${tile("Diesel")}${tile("Petrol")}</div>`).removeAttr("hidden");
+		};
+		this.drawFuelStock();
+		// read once on open as well: the warehouse arrives with a default on it, so the
+		// save check would otherwise have nothing to compare against until it is changed
+		this.readFuelAvailability();
+	}
+
+	bindFuelFields(control, df) {
+		if (!FUEL_LOCKED_KINDS.includes(this.state.kind)) return;
+		// the two narrowings both desk forms apply in their onload handlers
+		if (df.fieldname === "item") control.get_query = () => ({ filters: { item_group: "Fuel" } });
+		if (df.fieldname === "location") control.get_query = () => ({ filters: [["name", "not in", ["Mahurzari"]]] });
+		if (!control.$input) return;
+		if (["warehouse", "item"].includes(df.fieldname)) {
+			control.$input.on("change.agfuel awesomplete-selectcomplete.agfuel", () => {
+				if (df.fieldname === "warehouse") this.drawFuelStock?.();
+				this.readFuelAvailability();
+			});
+		}
+		// quantity x rate, kept twice over: the exact figure and the rounded one it
+		// bills on, exactly as calculate_amountffs does
+		if (["quantity_ffs", "rateltr_ffs"].includes(df.fieldname)) {
+			control.$input.on("change.agfuel input.agfuel", () => {
+				const amount = flt(this.getFormValue("quantity_ffs")) * flt(this.getFormValue("rateltr_ffs"));
+				this.extraFieldValues.aamountffs = amount;
+				this.extraFieldValues.amountffs = Math.ceil(amount);
+				this.formControl("aamountffs")?.set_value(amount);
+				this.formControl("amountffs")?.set_value(Math.ceil(amount));
+			});
+		}
+	}
+
+	async readFuelAvailability() {
+		if (this.state.kind !== "fuel-for-distribution") return;
+		const item = this.fuelValue("item");
+		const warehouse = this.fuelValue("warehouse");
+		if (!item || !warehouse) return;
+		let bin;
+		try {
+			bin = await frappe.db.get_value("Bin", { item_code: item, warehouse }, "actual_qty");
+		} catch (error) {
+			return; // nothing to compare against; the server still refuses a short issue
+		}
+		if (this.fuelValue("item") !== item || this.fuelValue("warehouse") !== warehouse) return;
+		this.fuelAvailable = flt(bin?.message?.actual_qty);
+		// hidden on the desk form too, and only the save check reads it
+		this.extraFieldValues.diesel_in_stockltr = this.fuelAvailable;
+	}
+
+	issuedFuelTotal() {
+		const state = this.tableStates.get("fuel_distribution_to_vehicle");
+		if (!state) return flt(this.formDoc.issued_quantity_ltr);
+		return state.rows.reduce((sum, row) => sum
+			+ flt(this.fieldValue(row.controls.issued_quantity_ct, row.data, "issued_quantity_ct")), 0);
+	}
+
+	syncIssuedTotal() {
+		if (this.state.kind !== "fuel-for-distribution") return 0;
+		const total = this.issuedFuelTotal();
+		// the field is read-only, so its own control is not what gets sent out - a
+		// read-only control reads back as undefined and collectDocument keeps the old
+		// value. extraFieldValues is merged last and wins.
+		this.extraFieldValues.issued_quantity_ltr = total;
+		this.formControl("issued_quantity_ltr")?.set_value(total);
+		return total;
+	}
+
+	syncJournalTotals() {
+		if (this.state.kind !== "journal-entry") return;
+		const state = this.tableStates.get("accounts");
+		if (!state) return;
+		const side = (fieldname) => state.rows.reduce((running, row) => running
+			+ flt(this.fieldValue(row.controls[fieldname], row.data, fieldname)), 0);
+		const debit = side("debit_in_account_currency");
+		const credit = side("credit_in_account_currency");
+		// read-only boxes, and the server works all three out again on save; these are
+		// here so the difference can be watched closing rather than found at submit
+		this.formControl("total_debit")?.set_value(debit);
+		this.formControl("total_credit")?.set_value(credit);
+		this.formControl("difference")?.set_value(debit - credit);
+	}
+
+	bindJournalRow(state, rowContext) {
+		if (this.state.kind !== "journal-entry") return;
+		for (const fieldname of ["debit_in_account_currency", "credit_in_account_currency"]) {
+			const control = rowContext.controls[fieldname];
+			if (control?.$input?.length) control.$input.on("change.agje input.agje", () => this.syncJournalTotals());
+		}
+	}
+
+	bindVehicleRow(state, rowContext) {
+		if (this.state.kind !== "fuel-for-distribution") return;
+		const vehicle = rowContext.controls.vehicle_details;
+		if (vehicle?.$input?.length) {
+			vehicle.$input.on("change.agvehicle awesomplete-selectcomplete.agvehicle", async () => {
+				const name = vehicle.get_value();
+				let reading = 0;
+				if (name) {
+					try {
+						reading = await frappe.xcall(VEHICLE_READING_METHOD, { vehicle: name });
+					} catch (error) {
+						reading = 0; // a vehicle with no history reads the same as no reading
+					}
+				}
+				if (vehicle.get_value() !== name) return; // the row moved on
+				rowContext.data.last_readingkm = reading || 0;
+				rowContext.controls.last_readingkm?.set_value(reading || 0);
+			});
+		}
+		const issued = rowContext.controls.issued_quantity_ct;
+		if (issued?.$input?.length) issued.$input.on("change.agvehicle input.agvehicle", () => this.syncIssuedTotal());
 	}
 
 	formControl(fieldname) {
@@ -5866,6 +8664,8 @@ class AgriventurePortal {
 		// items already chosen in other rows are filtered out of this row's own search
 		// results instead of being caught after the fact - see excludeSelectedItems()
 		this.excludeSelectedItems(itemControl, state, rowContext);
+		this.bindVehicleRow(state, rowContext);
+		this.bindJournalRow(state, rowContext);
 		if (itemControl?.$input?.length) itemControl.$input.on("awesomplete-selectcomplete.agitem change.agitem", () => {
 			// this.checkDuplicateItem(state, rowContext);
 			this.fillItemDefaults(rowContext);
@@ -5891,7 +8691,7 @@ class AgriventurePortal {
 			if (cropControl?.get_value() && !uomControl?.get_value()) this.fillCropUom(rowContext, cropItem.fieldname);
 		}
 		this.bindTaxRowEdits(state, rowContext);
-		if (Number(this.formDoc?.docstatus || 0) !== 0 || READ_ONLY_KINDS.includes(this.state.kind)) {
+		if (Number(this.formDoc?.docstatus || 0) !== 0 || this.formReadOnly()) {
 			row.find(".ag-remove-row").remove();
 		}
 		row.find(".ag-remove-row").on("click", () => {
@@ -5904,6 +8704,11 @@ class AgriventurePortal {
 		});
 		this.propagateParentFields();
 		this.scheduleRecalculation();
+	}
+
+	collectedValue(df, value) {
+		if (!frappe.model.numeric_fieldtypes.includes(df?.fieldtype)) return value;
+		return value === undefined || value === null || value === "" ? 0 : value;
 	}
 
 	collectDocument() {
@@ -5919,9 +8724,10 @@ class AgriventurePortal {
 			// Frappe returns `this.value || undefined` for a read-only control, so a zero or
 			// an empty string comes back as nothing at all. The document's own value is kept
 			// in that case rather than being blanked on the way out.
-			payload[field.fieldname] = control.df?.read_only && current === undefined && this.formDoc[field.fieldname] !== undefined
+			const resolved = control.df?.read_only && current === undefined && this.formDoc[field.fieldname] !== undefined
 				? this.formDoc[field.fieldname]
 				: current;
+			payload[field.fieldname] = this.collectedValue(control.df || field, resolved);
 		}
 		// values written by code rather than typed - GPS coordinates, for instance - belong to
 		// hidden fields that never become controls, so they are merged last and win
@@ -5931,6 +8737,14 @@ class AgriventurePortal {
 		// <original>-1, and the amendment trail is broken. The server re-checks it.
 		if (this.formDoc.amended_from && !payload.amended_from) {
 			payload.amended_from = this.formDoc.amended_from;
+		}
+		// A return says so through these two. is_return is on the form and can be
+		// unticked, so a 0 that came from the control is left alone; return_against is
+		// behind depends_on, never becomes a control, and would be lost without this.
+		for (const fieldname of ["is_return", "return_against"]) {
+			if (this.formDoc[fieldname] !== undefined && !this.hasValue(payload[fieldname])) {
+				payload[fieldname] = this.formDoc[fieldname];
+			}
 		}
 		// a mapped document can arrive with child tables this workspace never renders, such as
 		// the payment references on a payment raised from an invoice; they are passed through
@@ -5951,7 +8765,7 @@ class AgriventurePortal {
 					const current = control.get_value();
 					// same as above: an Opening Amount of 0 must survive the trip
 					if (control.df?.read_only && current === undefined && value[name] !== undefined) continue;
-					value[name] = current;
+					value[name] = this.collectedValue(control.df, current);
 				}
 				return value;
 			});
@@ -5971,17 +8785,47 @@ class AgriventurePortal {
 		});
 	}
 
+	// Frappe's own rule for an empty required field: cstr(value) stripped of markup -
+	// so 0 and false are values, not blanks (base_document.py:758). Plain !value in JS
+	// disagrees on exactly those two, which is what made a zero opening float unsavable.
+	// What a field really holds. The control is asked first, but a read-only one answers
+	// `this.value || undefined` (base_control.js:266) - so a genuine 0 comes back as
+	// undefined and would read as blank. The doc behind the control still has it.
+	fieldValue(control, data, fieldname) {
+		const live = control ? control.get_value() : undefined;
+		if (this.hasValue(live)) return live;
+		return data ? data[fieldname] : undefined;
+	}
+
+	hasValue(value) {
+		return !(value === undefined || value === null || value === "" ||
+			(Array.isArray(value) && !value.length));
+	}
+
 	validateForm() {
 		const missing = [];
+		// What the vehicles were issued is the document's own total, and no more can go
+		// out than the warehouse holds. validate_stock() in fuel_for_distribution.js does
+		// both; recomputing here also covers a row removed after the last edit.
+		this.syncJournalTotals();
+		const issuedFuel = this.syncIssuedTotal();
+		if (this.state.kind === "fuel-for-distribution" && issuedFuel
+			&& this.fuelAvailable !== null && issuedFuel > flt(this.fuelAvailable)) {
+			frappe.msgprint({
+				title: __("Stock Error"), indicator: "red",
+				message: `${__("Available Stock")}: <b>${flt(this.fuelAvailable)}</b> Ltr<br>${__("Total Issued")}: <b>${issuedFuel}</b> Ltr`,
+			});
+			return false;
+		}
 		for (const { field, control } of this.formControls) {
-			if (field.reqd && !control.get_value()) missing.push(field.label);
+			if (field.reqd && !this.hasValue(this.fieldValue(control, this.formDoc, field.fieldname))) missing.push(field.label);
 		}
 		for (const state of this.tableStates.values()) {
 			if (state.field.reqd && !state.rows.length) missing.push(state.field.label);
 			state.rows.forEach((row, index) => {
 				// a row the user never filled is dropped before saving, so it is not validated either
 				if (!this.isChildRowFilled(state, row)) return;
-				for (const column of state.columns) if (column.reqd && !row.controls[column.fieldname]?.get_value()) missing.push(`${state.field.label} row ${index + 1}: ${column.label}`);
+				for (const column of state.columns) if (column.reqd && !this.hasValue(this.fieldValue(row.controls[column.fieldname], row.data, column.fieldname))) missing.push(`${state.field.label} row ${index + 1}: ${column.label}`);
 			});
 		}
 		if (missing.length) {
@@ -6057,3 +8901,19 @@ class AgriventurePortal {
 		this.wrapper.html(this.errorMarkup(error));
 	}
 }
+
+/* ===== AGRIVENTURE APP-ONLY ENHANCE LOADER (Dux Digitech) =====
+   Loads the app-only enhancement (colour + native feel) ONLY inside the
+   Capacitor app. The website never loads it. Cache-busted so edits to
+   agriventure-app.js/.css always show on the next app open.
+   Safe to keep across agriventure.js redeploys — re-append if it goes missing. */
+(function () {
+  try {
+    var isApp = (window.Capacitor && (window.Capacitor.isNativePlatform ? window.Capacitor.isNativePlatform() : true)) ||
+                /AgriventureApp/i.test(navigator.userAgent || "");
+    if (!isApp) return;
+    var s = document.createElement("script");
+    s.src = "/assets/agriventure/js/agriventure-app.js?v=" + Date.now();
+    document.head.appendChild(s);
+  } catch (e) {}
+})();

@@ -911,3 +911,563 @@ body.ag-portal-active .page-content>.container{width:100%!important;max-width:no
    colours because a plain tr:hover td would otherwise paint over the highlight. */
 .agriventure-app .ag-table-wrap td.ag-lowest,
 .agriventure-app .ag-table-wrap tbody tr:hover td.ag-lowest{background:#e4f5e9;color:#16794c;font-weight:800}
+
+/* prod - the host theme paints gradients across the Desk; a dropdown in this portal states
+   its own surface so none of them can land on it. background-image is reset as well as the
+   colour, because a gradient arrives as an image and a plain background wins nothing. */
+.agriventure-app .awesomplete>ul,.agriventure-app .awesomplete>[role="listbox"],
+.ag-dialog .awesomplete>ul,.ag-dialog .awesomplete>[role="listbox"]{
+	background:#fff!important;background-image:none!important}
+.agriventure-app .awesomplete>ul>li,.agriventure-app .awesomplete>ul>[role="option"],
+.agriventure-app .awesomplete>[role="listbox"]>li,.agriventure-app .awesomplete>[role="listbox"]>[role="option"],
+.ag-dialog .awesomplete>ul>li,.ag-dialog .awesomplete>ul>[role="option"],
+.ag-dialog .awesomplete>[role="listbox"]>li,.ag-dialog .awesomplete>[role="listbox"]>[role="option"]{
+	background:#fff!important;background-image:none!important;color:#1f2533!important;
+	border-radius:0!important;box-shadow:none!important}
+.agriventure-app .awesomplete>ul>li:hover,.agriventure-app .awesomplete>ul>li[aria-selected="true"],
+.agriventure-app .awesomplete>ul>[role="option"]:hover,.agriventure-app .awesomplete>ul>[role="option"][aria-selected="true"],
+.agriventure-app .awesomplete>[role="listbox"]>li:hover,.agriventure-app .awesomplete>[role="listbox"]>li[aria-selected="true"],
+.agriventure-app .awesomplete>[role="listbox"]>[role="option"]:hover,.agriventure-app .awesomplete>[role="listbox"]>[role="option"][aria-selected="true"],
+.ag-dialog .awesomplete>ul>li:hover,.ag-dialog .awesomplete>ul>li[aria-selected="true"],
+.ag-dialog .awesomplete>ul>[role="option"]:hover,.ag-dialog .awesomplete>ul>[role="option"][aria-selected="true"]{
+	background:#eef0fb!important;background-image:none!important;color:#1f2533!important}
+/* the blank row that clears a chosen value: a slim line with a dash, never a coloured bar */
+.agriventure-app .awesomplete>ul>li.ag-combo-blank,.ag-dialog .awesomplete>ul>li.ag-combo-blank{
+	background:#fff!important;background-image:none!important;min-height:26px!important;height:26px!important;
+	padding:4px 12px!important;color:#8a90a0!important}
+.agriventure-app .awesomplete>ul>li.ag-combo-blank:hover,.ag-dialog .awesomplete>ul>li.ag-combo-blank:hover{
+	background:#f4f5fa!important}
+
+/* prod - a dialog Frappe opens for us is not ours to class, so the portal claims the
+   primary button while it is the page on screen. body.ag-portal-active is toggled off by
+   the router the moment another page is opened, so nothing here reaches the rest of the
+   Desk. background-image is cleared too: the host's green arrives as a gradient. */
+body.ag-portal-active .modal .btn-primary,
+body.ag-portal-active .modal .btn-modal-primary,
+body.ag-portal-active .agriventure-app .btn-primary{
+	background:#4935cf!important;background-image:none!important;
+	border-color:#4935cf!important;color:#fff!important}
+body.ag-portal-active .modal .btn-primary:hover,
+body.ag-portal-active .modal .btn-modal-primary:hover,
+body.ag-portal-active .agriventure-app .btn-primary:hover{
+	background:#3d2cb0!important;background-image:none!important;border-color:#3d2cb0!important}
+/* the uploader's own secondary controls should not turn green either */
+body.ag-portal-active .modal .btn-secondary,
+body.ag-portal-active .modal .file-upload-area .btn{
+	background-image:none!important}
+
+/* PR Status on the Purchase Order list, in the colours ERPNext uses for the same idea:
+   green once the order is fully received, yellow while it is part way, grey before any
+   receipt exists. The slugs come from statusBadge, which lowercases and hyphenates. */
+.ag-status-pill.received{background:#e4f5e9;color:#16794c}
+.ag-status-pill.partly-received{background:#fff7d3;color:#ab6e05}
+.ag-status-pill.not-received{background:#f3f3f3;color:#525252}
+
+/* Material Request PO Status (the "status" field), coloured to match ERPNext's own
+   frappe.listview_settings["Material Request"].get_indicator exactly (material_request_list.js):
+   green/orange/yellow/red are ERPNext's real indicator hex values, not approximations.
+   statusBadge lowercases+hyphenates the status text, e.g. "Partially Received" -> partially-received.
+   Added rather than reusing partly-received above: ERPNext's own string says "Partially", not "Partly". */
+.ag-status-pill.ordered,.ag-status-pill.transfered,.ag-status-pill.issued{background:#e4f5e9;color:#16794c}
+.ag-status-pill.not-started{background:#fff1e7;color:#bd3e0c}
+.ag-status-pill.in-transit,.ag-status-pill.partially-received,.ag-status-pill.partially-ordered{background:#fff7d3;color:#ab6e05}
+.ag-status-pill.stopped{background:#fff0f0;color:#b52a2a}
+/* Pending is ERPNext's orange, not the grey the shared .pending rule above gives return/return-issued;
+   scoped to just these three so that grey stays for Return/Return Issued. */
+.ag-status-pill.pending,.ag-status-pill.l1-approval-pending,.ag-status-pill.l2-approval-pending{background:#fff1e7;color:#bd3e0c}
+
+/* New custom checkout (Point of Sale (New)) - additive alongside the classic till, which
+   keeps its own unstyled/ERPNext-desk look untouched. Reuses the same tokens and card/button
+   language as the rest of the portal (--ag-primary, --ag-border, .ag-button, .ag-form-section). */
+.ag-pos-checkout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:16px;height:calc(100vh - 66px - 56px);padding:20px 24px}
+.ag-pos-catalog{display:flex;flex-direction:column;min-height:0;background:#fff;border:1px solid var(--ag-border);border-radius:14px;overflow:hidden}
+.ag-pos-catalog-head{display:flex;gap:10px;padding:14px;border-bottom:1px solid var(--ag-border)}
+.ag-pos-catalog-head .ag-search-control{flex:1;height:38px;border:1px solid var(--ag-border);border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 11px;color:#919aac}
+.ag-pos-catalog-head .ag-search-control svg{width:14px;height:14px}
+.ag-pos-catalog-head input{border:0!important;outline:0!important;width:100%;background:transparent!important;font-size:12px;color:var(--ag-text)}
+.ag-pos-item-group{height:38px;border:1px solid var(--ag-border);border-radius:9px;background:#fff;color:#465067;font-size:12px;padding:0 10px;min-width:170px}
+.ag-pos-item-grid{flex:1;overflow-y:auto;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-content:start}
+.ag-pos-item-tile{border:1px solid var(--ag-border);border-radius:11px;background:#fbfbfd;padding:12px;display:flex;flex-direction:column;gap:6px;text-align:left;min-height:96px}
+.ag-pos-item-tile:hover{border-color:#bdb5ff;background:#faf9ff}
+.ag-pos-item-qty{align-self:flex-end;font-size:9px;font-weight:700;color:#8b94a7;background:#eef0f5;border-radius:999px;padding:2px 7px}
+.ag-pos-item-name{font-size:12px;font-weight:700;color:var(--ag-text);line-height:1.3}
+.ag-pos-item-rate{font-size:10px;color:var(--ag-muted);margin-top:auto}
+.ag-pos-item-more-wrap{padding:12px;text-align:center;border-top:1px solid var(--ag-border)}
+.ag-pos-cart{display:flex;flex-direction:column;min-height:0;background:#fff;border:1px solid var(--ag-border);border-radius:14px;padding:16px;gap:12px}
+.ag-pos-cart-head b{font-size:13px}
+.ag-pos-cart-customer .frappe-control{margin:0}
+.ag-pos-cart-lines{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.ag-pos-cart-empty{color:var(--ag-muted);font-size:12px;text-align:center;padding:30px 0}
+.ag-pos-cart-line{display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--ag-border);font-size:11px}
+.ag-pos-line-name{min-width:0}
+.ag-pos-line-name small{display:block;color:var(--ag-muted);font-size:9px}
+.ag-pos-line-qty{display:flex;align-items:center;gap:4px}
+.ag-pos-line-qty button{width:22px;height:22px;border:1px solid var(--ag-border);background:#fff;border-radius:6px}
+.ag-pos-line-qty-input,.ag-pos-line-rate{width:56px;height:26px;border:1px solid var(--ag-border);border-radius:6px;padding:0 6px;font-size:11px}
+.ag-pos-line-amount{font-weight:700;white-space:nowrap}
+.ag-pos-line-remove{border:0;background:transparent;color:var(--ag-red);display:grid;place-items:center}
+.ag-pos-cart-totals{border-top:1px solid var(--ag-border);padding-top:10px;font-size:11px;display:flex;flex-direction:column;gap:6px}
+.ag-pos-cart-totals>div{display:flex;justify-content:space-between}
+.ag-pos-grand{font-size:14px;font-weight:800;color:var(--ag-text)}
+.ag-pos-checkout-btn{width:100%}
+/* Checkout/payment step */
+.ag-pos-payment{max-width:520px;margin:0 auto;padding:28px 24px}
+.ag-pos-payment-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.ag-pos-payment-head h2{margin:0;font-size:16px}
+.ag-pos-payment-summary{display:flex;justify-content:space-between;background:#fbfbfd;border:1px solid var(--ag-border);border-radius:11px;padding:14px 16px;margin-bottom:14px;font-size:12px}
+.ag-pos-payment-summary b{display:block;font-size:16px;margin-top:4px}
+.ag-pos-payment-remaining.ag-pos-payment-over b{color:var(--ag-red)}
+.ag-pos-payment-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.ag-pos-payment-row{display:grid;grid-template-columns:1fr 140px auto;gap:8px}
+.ag-pos-payment-row select,.ag-pos-payment-row input{height:38px;border:1px solid var(--ag-border);border-radius:9px;padding:0 10px;font-size:12px}
+.ag-pos-payment-row-remove{border:0;background:transparent;color:var(--ag-red)}
+.ag-pos-payment-add-row{width:100%;margin-bottom:10px}
+.ag-pos-payment-submit{width:100%}
+/* Order-complete screen */
+.ag-pos-summary{max-width:420px;margin:60px auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
+.ag-pos-summary-icon{width:52px;height:52px;border-radius:50%;background:var(--ag-teal-soft);color:var(--ag-teal);display:grid;place-items:center}
+.ag-pos-summary h1{margin:4px 0 0;font-size:20px}
+.ag-pos-summary-totals{display:flex;gap:24px;margin:14px 0}
+.ag-pos-summary-totals b{display:block;font-size:16px}
+.ag-pos-summary-actions{display:flex;gap:10px;margin-top:10px}
+@media(max-width:900px){.ag-pos-checkout{grid-template-columns:1fr;height:auto}.ag-pos-cart{order:-1}}
+
+/* POS Opening Entry, in the colours ERPNext's own list uses
+   (pos_opening_entry_list.js): Draft red, Open orange, Closed green, Cancelled red.
+   Closed was already green here; Open had no rule of its own and fell through to the
+   default pill, which is green too - so a shift that was still running looked closed. */
+.ag-status-pill.open{background:#fff1e7;color:#bd3e0c}
+
+/* SETTINGS group - same collapse behaviour as STOCK above it, but this one starts
+   closed (aria-expanded="false" in the markup plus the class on first render), since a
+   setup master is looked at far less often than a transaction list. */
+.agriventure-app .ag-setup-list{display:block}
+.agriventure-app.ag-setup-collapsed .ag-setup-list{display:none!important}
+.agriventure-app .ag-nav-heading[data-action=toggle-setup] svg{transition:transform .15s ease}
+.agriventure-app.ag-setup-collapsed .ag-nav-heading[data-action=toggle-setup] svg{transform:rotate(-90deg)}
+
+/* The quick-entry dialog is one of the Desk's own modals, so it lands wearing the Desk
+   theme's green while the workspace behind it is purple. The portal already settles the
+   primary button; these carry the same treatment through the dialog's own controls -
+   inputs, their focus ring, checkboxes and links - so a create dialog reads as part of
+   this page rather than as a visitor from the Desk. */
+body.ag-portal-active .modal .frappe-control input:not([type=checkbox]):not([type=radio]),
+body.ag-portal-active .modal .frappe-control select,
+body.ag-portal-active .modal .frappe-control textarea{
+	background:#fff!important;background-image:none!important;
+	border-color:#e2e4ea!important;border-radius:8px!important;
+}
+body.ag-portal-active .modal .frappe-control input:focus,
+body.ag-portal-active .modal .frappe-control select:focus,
+body.ag-portal-active .modal .frappe-control textarea:focus{
+	border-color:#4935cf!important;
+	box-shadow:0 0 0 2px rgba(73,53,207,.16)!important;
+}
+body.ag-portal-active .modal .frappe-control input[type=checkbox]{accent-color:#4935cf}
+body.ag-portal-active .modal a,
+body.ag-portal-active .modal .link-btn .btn-open{color:#4935cf!important}
+body.ag-portal-active .modal .awesomplete>ul>li[aria-selected=true],
+body.ag-portal-active .modal .awesomplete>ul>li:hover{
+	background:#f2f0fd!important;background-image:none!important;
+}
+body.ag-portal-active .modal .modal-title{font-weight:600}
+
+/* The brand, when a letter head image is what it shows.
+   56px is the height Dux Portal gives the same logo (Dux Portal Settings.logo_height, and
+   the Desk's own .navbar-home img cap), so the two pages wear it at one size. The file is
+   622x327, which at 56px tall comes to 107px wide - well inside the 176px the sidebar has
+   between its padding, so width:auto is safe and keeps the logo's proportions.
+   The padding is what the wordmark block carried (20/28/18 around ~45px of text) rebalanced
+   around 56px, so the block stays ~83px tall and nothing below it moves. */
+.agriventure-app .ag-brand.ag-brand-logo{
+	display:flex;align-items:center;padding:14px 28px 13px;
+}
+.agriventure-app .ag-brand.ag-brand-logo img{
+	height:56px;width:auto;max-width:100%;object-fit:contain;display:block;
+}
+
+/* Icons in dark mode.
+   Frappe draws every icon as an SVG whose stroke is var(--icon-stroke), and that resolves
+   to var(--gray-800) - a dark grey fixed by the Desk theme (css_variables.scss:32), not to
+   the colour of whatever is holding the icon. The rules above already give each dark
+   container its own light `color`, but the icon never looked at it, so it painted dark grey
+   on a dark panel and disappeared.
+   Pointing the variable at currentColor is what Frappe itself does for buttons
+   (buttons.scss:51), and it makes every icon inherit the colour its container already sets
+   - sidebar, summary cards, toolbar and table rows alike. The solid variants follow too:
+   those swap the two variables (icons.scss:17), so they fill with currentColor instead. */
+.agriventure-app.ag-dark .icon{--icon-stroke:currentColor}
+
+/* Two buttons were being stretched edge to edge on a phone.
+   Add: the narrow breakpoint sets .ag-page-head .ag-button{width:100%}, which was meant
+   for a title and button stacked in one column - but a button that wide reads as a banner
+   rather than an action, and it is the only thing on its row anyway.
+   Clear: its cell is grid-column:1/-1 so it always owns a whole row, and the button itself
+   carries width:100%. The row can stay full width - that is what keeps it off the filters
+   above - but the button inside it only needs to be as wide as its own label, sitting at
+   the right where the eye already is after the last filter.
+   Both are held to the phone widths, so the desktop toolbar is untouched. */
+@media(max-width:720px){
+	.agriventure-app .ag-page-head .ag-button{width:auto}
+	.agriventure-app .ag-filter-field-clear .ag-filter-control{display:flex;justify-content:flex-end}
+	.agriventure-app .ag-filter-field-clear .ag-filter-clear{width:auto;min-width:0;padding:9px 16px}
+	/* the blank label that keeps the filters aligned on a wide toolbar is dead space once
+	   everything is stacked in one column */
+	.agriventure-app .ag-filter-field-clear .ag-filter-label-slot{display:none}
+}
+
+/* ---- ag-mobile-form-pass: the form on a phone ----------------------------------- */
+
+/* 1. The Items grid.
+   "Items table width-fit" (Aug 2026) pins every child table to min-width:0, width:100%
+   and table-layout:fixed so a wide desktop card never shows a horizontal scrollbar. That
+   is right on a desktop and wrong on a phone: seven columns divided into 250px leaves
+   ~35px each, so the headers read ITEM C / REQUII / QUAN' and the inputs are unusable.
+   Below 720px the table gets its natural width back and the box that already wraps it
+   (.ag-child-scroll, overflow:auto) does what it was built for. This is the same pattern
+   the list tables already use at this breakpoint. */
+@media(max-width:720px){
+	.agriventure-app .ag-child-table table{
+		min-width:720px!important;width:auto!important;table-layout:auto!important;
+	}
+	.agriventure-app .ag-child-table td,
+	.agriventure-app .ag-child-table th{
+		min-width:112px!important;padding:7px!important;font-size:11px!important;
+	}
+	/* the delete column carries only an icon */
+	.agriventure-app .ag-child-table td:last-child,
+	.agriventure-app .ag-child-table th:last-child{min-width:42px!important;width:42px!important}
+	/* the row number needs less still */
+	.agriventure-app .ag-child-table td:first-child,
+	.agriventure-app .ag-child-table th:first-child{min-width:30px!important;width:30px!important}
+	.agriventure-app .ag-child-scroll{overflow:auto!important;-webkit-overflow-scrolling:touch}
+	/* a scrolling grid should say so before the user tries to read a clipped column */
+	.agriventure-app .ag-child-table{overflow:hidden}
+
+	/* 2. The form's own buttons.
+	   Below 440px .ag-form-actions turns into a two-column grid whose buttons are width:100%,
+	   so Back to List and Save each painted as a full-width bar - a banner rather than an
+	   action, and it pushed the first field a screen down. They only need to be as wide as
+	   their labels, sitting at the right the way they do on a desktop. */
+	.agriventure-app .ag-form-actions{
+		display:flex!important;flex-wrap:wrap;gap:8px;justify-content:flex-end;
+	}
+	.agriventure-app .ag-form-actions .ag-button{width:auto!important}
+}
+
+/* Items table on a narrow window.
+   An Aug 2026 change forced every child table to fit its container - min-width:0,
+   width:100% and table-layout:fixed, all !important - so a horizontal scrollbar would
+   never appear. With room to spare that reads fine. Once the window shrinks, fixed layout
+   divides what is left equally between seven columns, and each cell lands at about 50px:
+   the headers truncate to "ITEM CO REQUIRE QUANTI" and the inputs become unusable squares.
+   Below 1050px the original behaviour is restored instead - the table keeps its natural
+   width and the box around it scrolls, which is what the base rules always intended.
+   Half-width tables are left alone: two of them share a row on purpose, and min-width:0 is
+   what lets them do that. The material items table gives up its overflow:visible here too
+   (that exists so a dropdown can escape on a wide screen); a clipped dropdown is a smaller
+   price than columns nobody can type in. */
+@media(max-width:1050px){
+	.agriventure-app .ag-field-slot:not(.ag-field-half) .ag-child-table table{
+		min-width:840px!important;width:auto!important;table-layout:auto!important;
+	}
+	.agriventure-app .ag-field-slot:not(.ag-field-half) .ag-material-items-table table{
+		min-width:930px!important;
+	}
+	.agriventure-app .ag-child-table td,
+	.agriventure-app .ag-child-table th{min-width:125px!important;font-size:11px!important;padding:7px!important}
+	.agriventure-app .ag-child-table td:last-child,
+	.agriventure-app .ag-child-table th:last-child{min-width:45px!important}
+	/* narrow screens the items table scrolls: three classes, so this beats the
+	   min-width:721px rule that turns the scroll off for the wide layout */
+	.agriventure-app .ag-child-table .ag-child-scroll{overflow:auto!important}
+}
+
+/* ---- Sidebar: identity row, Ctrl+K badge, and the collapsible icon rail ---- */
+
+/* the shortcut the search box advertises */
+.agriventure-app .ag-kbd{
+	flex:none;font-family:inherit;font-size:8px;font-weight:700;letter-spacing:.04em;
+	color:#8b94a7;background:#f1f3f8;border:1px solid #e4e7ee;border-radius:5px;padding:3px 5px;
+}
+
+.agriventure-app .ag-collapse-toggle{
+	border:0;background:transparent;width:calc(100% - 18px);margin:0 9px 6px;
+	min-height:34px;border-radius:9px;padding:8px 11px;
+	display:flex;align-items:center;gap:10px;
+	color:#657087;font-size:11px;font-weight:600;cursor:pointer;
+}
+.agriventure-app .ag-collapse-toggle:hover{background:#f4f6fa;color:var(--ag-text)}
+.agriventure-app .ag-collapse-icon{display:grid;place-items:center;flex:none;transition:transform .18s ease}
+
+/* The rail itself. Desktop only - below 721px the sidebar is already an off-canvas drawer,
+   which is the better answer on a phone, and narrowing it there would fight that.
+   --ag-sidebar is what both the sidebar's width and the main area's margin read, so moving
+   the one variable moves the whole layout; the transitions sit on width and margin-left,
+   since a custom property does not animate on its own. */
+@media(min-width:721px){
+	.agriventure-app .ag-sidebar{transition:width .18s ease}
+	.agriventure-app .ag-main{transition:margin-left .18s ease}
+	.agriventure-app.ag-rail{--ag-sidebar:68px}
+	/* everything that is words rather than an icon steps aside */
+	.agriventure-app.ag-rail .ag-menu-search,
+	.agriventure-app.ag-rail .ag-nav-heading,
+	.agriventure-app.ag-rail .ag-nav>span:last-child,
+	.agriventure-app.ag-rail .ag-collapse-toggle>span:last-child,
+	.agriventure-app.ag-rail .ag-user-copy,
+	.agriventure-app.ag-rail .ag-user-fy{display:none!important}
+	/* the icons centre themselves in what is left */
+	.agriventure-app.ag-rail .ag-nav{justify-content:center!important;padding:9px 0;gap:0}
+	.agriventure-app.ag-rail .ag-collapse-toggle{justify-content:center;padding:8px 0;gap:0}
+	.agriventure-app.ag-rail .ag-collapse-icon{transform:rotate(180deg)}
+	.agriventure-app.ag-rail .ag-user{justify-content:center;padding:12px 0;gap:0}
+	.agriventure-app.ag-rail .ag-logout{display:none!important}
+	.agriventure-app.ag-rail .ag-sidebar nav{padding:8px 9px 14px}
+	/* the group headings are gone, so a hairline keeps the groups apart */
+	.agriventure-app.ag-rail .ag-transaction-list,
+	.agriventure-app.ag-rail .ag-attendance-list,
+	.agriventure-app.ag-rail .ag-pos-list,
+	.agriventure-app.ag-rail .ag-crop-list,
+	.agriventure-app.ag-rail .ag-stock-list,
+	.agriventure-app.ag-rail .ag-master-list,
+	.agriventure-app.ag-rail .ag-setup-list{
+		padding-top:7px;margin-top:7px;border-top:1px solid var(--ag-border);
+	}
+	.agriventure-app.ag-rail .ag-reports-list{padding-top:7px;margin-top:7px;border-top:1px solid var(--ag-border)}
+	/* REPORT is a heading that is also the link, so it keeps an icon to be clickable */
+	.agriventure-app.ag-rail .ag-reports-list .ag-nav-heading-link{
+		display:flex!important;justify-content:center;padding:9px 0;
+	}
+	.agriventure-app.ag-rail .ag-reports-list .ag-nav-heading-link span{display:none}
+	.agriventure-app.ag-rail .ag-reports-list .ag-nav-heading-link::after{
+		content:"";width:16px;height:16px;flex:none;
+		background:currentColor;opacity:.75;
+		-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M5 3h9l5 5v13H5V3zm9 1.5V8h3.5L14 4.5zM7 11h10v1.5H7V11zm0 4h10v1.5H7V15z'/%3E%3C/svg%3E") center/contain no-repeat;
+		mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M5 3h9l5 5v13H5V3zm9 1.5V8h3.5L14 4.5zM7 11h10v1.5H7V11zm0 4h10v1.5H7V15z'/%3E%3C/svg%3E") center/contain no-repeat;
+	}
+	/* the logo is 622x327; at 68px wide it has to come down to fit */
+	.agriventure-app.ag-rail .ag-brand.ag-brand-logo{padding:12px 8px;justify-content:center}
+	.agriventure-app.ag-rail .ag-brand.ag-brand-logo img{height:30px}
+	.agriventure-app.ag-rail .ag-brand strong{font-size:15px;border-bottom:0}
+	.agriventure-app.ag-rail .ag-brand small{display:none}
+	.agriventure-app.ag-rail .ag-brand{padding:16px 8px;text-align:center}
+}
+
+.ag-dark .ag-collapse-toggle:hover{background:#161d2a}
+.ag-dark .ag-kbd{background:#1b2331;border-color:#2b3448;color:#8b94a7}
+
+/* ---- Dashboard cards: the hovered look from the vehicle dashboard ---- */
+/* A bar across the top in the card's own colour, that colour picked up by the border, and
+   a small lift. Each card already has a tinted icon - teal for a Purchase Order, amber for
+   a Receipt, blue for an Invoice - so the accent is published once as a variable per kind
+   and a single hover rule reads it. That way the bar always matches the icon above it, and
+   a new card only needs its own variable.
+   The bar is a ::before rather than a border-top, which would push the contents down by
+   3px on hover; and rather than an inset shadow, which would square off the rounded top
+   corners. */
+.agriventure-app .ag-summary-card{
+	position:relative;overflow:hidden;
+	--ag-card-accent:var(--ag-primary);
+	transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;
+}
+.agriventure-app .ag-summary-purchase-order{--ag-card-accent:#0c9d87}
+.agriventure-app .ag-summary-purchase-receipt{--ag-card-accent:#bd7a16}
+.agriventure-app .ag-summary-purchase-invoice{--ag-card-accent:#337ac1}
+.agriventure-app .ag-summary-payment-entry{--ag-card-accent:#07866f}
+.agriventure-app .ag-summary-card::before{
+	content:"";position:absolute;inset:0 0 auto 0;height:3px;
+	background:var(--ag-card-accent);
+	transform:scaleX(0);transform-origin:left center;
+	transition:transform .16s ease;
+}
+.agriventure-app .ag-summary-card:hover{
+	border-color:var(--ag-card-accent);
+	transform:translateY(-2px);
+	box-shadow:0 14px 30px rgba(32,38,56,.12);
+}
+.agriventure-app .ag-summary-card:hover::before{transform:scaleX(1)}
+
+/* dark mode keeps the same accents; only the resting shadow is heavier there */
+.ag-dark .ag-summary-card:hover{box-shadow:0 14px 30px rgba(0,0,0,.45)}
+.ag-dark .ag-summary-purchase-order{--ag-card-accent:#31cdb3}
+.ag-dark .ag-summary-purchase-receipt{--ag-card-accent:#e5ac4d}
+.ag-dark .ag-summary-purchase-invoice{--ag-card-accent:#70b9ee}
+.ag-dark .ag-summary-payment-entry{--ag-card-accent:#31cdb3}
+.ag-dark .ag-summary-card{--ag-card-accent:#a99fff}
+
+/* someone who has asked for less movement gets the colour without the lift */
+@media(prefers-reduced-motion:reduce){
+	.agriventure-app .ag-summary-card,
+	.agriventure-app .ag-summary-card::before{transition:none}
+	.agriventure-app .ag-summary-card:hover{transform:none}
+}
+
+/* ---- POS item tile: the picture the Desk POS shows ---- */
+/* item_image comes back from ERPNext's own get_items and was simply never drawn. The stock
+   badge moves inside the thumbnail so it sits over the corner of the picture, the way the
+   Desk tile has it, instead of pushing the name down. */
+.agriventure-app .ag-pos-item-thumb{
+	position:relative;display:block;width:100%;aspect-ratio:1/1;
+	border-radius:8px;overflow:hidden;background:#fff;
+	display:grid;place-items:center;
+}
+.agriventure-app .ag-pos-item-thumb img{
+	width:100%;height:100%;object-fit:contain;display:block;padding:6px;
+}
+/* no picture: the first letter, so the grid keeps its rhythm */
+.agriventure-app .ag-pos-item-thumb b{
+	font-size:26px;font-weight:700;color:#b6bdcb;line-height:1;
+	width:100%;height:100%;display:grid;place-items:center;background:#f1f3f8;
+}
+.agriventure-app .ag-pos-item-thumb .ag-pos-item-qty{
+	position:absolute;top:5px;right:5px;align-self:auto;
+	background:rgba(255,255,255,.94);box-shadow:0 1px 3px rgba(25,30,44,.16);
+}
+/* out of stock reads red, as it does on the Desk tile */
+.agriventure-app .ag-pos-item-tile[data-qty="0"] .ag-pos-item-qty{color:#c94459}
+.ag-dark .ag-pos-item-thumb{background:#0f1520}
+.ag-dark .ag-pos-item-thumb b{background:#1b2331}
+.ag-dark .ag-pos-item-thumb b{color:#4a5468}
+.ag-dark .ag-pos-item-thumb .ag-pos-item-qty{background:rgba(16,22,33,.94);box-shadow:none}
+
+/* v20260912-prod-transport - Transport: its sidebar group, and the fuel stock card above both fuel forms */
+.agriventure-app.ag-transport-collapsed .ag-transport-list{display:none!important}
+.agriventure-app.ag-transport-collapsed .ag-nav-heading[data-action=toggle-transport] svg{transform:rotate(-90deg)}
+.agriventure-app .ag-fuel-stock{
+	margin:0 0 18px;padding:16px 18px;border:1px solid var(--ag-border);
+	border-radius:12px;background:var(--ag-panel);
+}
+.agriventure-app .ag-fuel-stock-head{
+	font-weight:600;color:var(--ag-text);margin-bottom:12px;font-size:14px;
+}
+.agriventure-app .ag-fuel-stock-grid{display:flex;gap:14px;flex-wrap:wrap}
+.agriventure-app .ag-fuel-tile{
+	flex:1 1 160px;padding:14px;border-radius:10px;text-align:center;
+	border:1px solid var(--ag-teal);background:var(--ag-teal-soft);
+}
+.agriventure-app .ag-fuel-tile span{display:block;font-size:13px;font-weight:600;color:var(--ag-muted)}
+.agriventure-app .ag-fuel-tile b{display:block;margin-top:4px;font-size:22px;color:var(--ag-teal)}
+.agriventure-app .ag-fuel-tile.is-low{border-color:var(--ag-red);background:var(--ag-red-soft)}
+.agriventure-app .ag-fuel-tile.is-low b{color:var(--ag-red)}
+@media(max-width:640px){
+	.agriventure-app .ag-fuel-stock-grid{flex-direction:column}
+}
+
+/* v20260928-prod-faceattendance - Face Attendance: the queue screen on the Attendance Log list */
+.agriventure-app .ag-page-head-actions{display:flex;gap:10px;flex-wrap:wrap}
+.ag-face-status{
+	margin:0 0 10px;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:600;
+	background:var(--ag-panel);border:1px solid var(--ag-border);color:var(--ag-text);
+}
+.ag-face-status[data-tone=green]{background:var(--ag-teal-soft);border-color:var(--ag-teal);color:var(--ag-teal)}
+.ag-face-status[data-tone=orange]{background:var(--ag-amber-soft);border-color:var(--ag-amber);color:var(--ag-amber)}
+.ag-face-status[data-tone=red]{background:var(--ag-red-soft);border-color:var(--ag-red);color:var(--ag-red)}
+.ag-face-choices{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ag-face-marked{margin-top:14px;font-size:12px;color:var(--ag-muted)}
+.ag-face-marked ol{margin:6px 0 0;padding-left:20px;max-height:150px;overflow:auto}
+.ag-face-marked li{margin:2px 0;color:var(--ag-text)}
+.ag-face-marked li small{color:var(--ag-muted);margin-left:6px}
+
+/* v20260928-prod-facediag - Face Attendance: the centre picker under the camera */
+.ag-face-centre{display:flex;align-items:center;gap:10px;margin-top:10px}
+.ag-face-centre label{font-size:12px;font-weight:600;color:var(--ag-muted);margin:0}
+.ag-face-centre select{
+	flex:1;min-height:34px;border-radius:8px;padding:6px 10px;font-size:13px;
+	border:1px solid var(--ag-border);background:var(--ag-panel);color:var(--ag-text);
+}
+
+/* v20260928-prod-dialogborder - dialog inputs carry the same box the portal's own fields do.
+   Frappe paints a dialog control with a background and no border until it is focused,
+   so on this theme's white panel the empty boxes were invisible and only the one being
+   typed in had an outline. Scoped to body.ag-portal-active: every dialog opened from
+   this workspace, and no dialog anywhere else in the Desk. */
+body.ag-portal-active .modal .form-control,
+body.ag-portal-active .modal .input-with-feedback,
+body.ag-portal-active .modal select,
+body.ag-portal-active .modal textarea,
+body.ag-portal-active .modal .awesomplete input,
+body.ag-portal-active .modal .ql-editor{
+	min-height:36px;border:1px solid var(--ag-border);border-radius:8px;
+	background:#fff;color:#30384a;box-shadow:none;
+}
+body.ag-portal-active .modal .form-control:focus,
+body.ag-portal-active .modal .input-with-feedback:focus,
+body.ag-portal-active .modal select:focus,
+body.ag-portal-active .modal textarea:focus,
+body.ag-portal-active .modal .awesomplete input:focus{
+	border-color:#aaa0fa;box-shadow:0 0 0 3px rgba(91,69,232,.08);
+}
+/* a read-only value is still a box, just a quieter one */
+body.ag-portal-active .modal .like-disabled-input{
+	min-height:36px;border:1px solid #eceef3;border-radius:8px;background:#f7f8fa;
+}
+/* a checkbox is not a text box and must not grow one */
+body.ag-portal-active .modal input[type=checkbox],
+body.ag-portal-active .modal input[type=radio]{
+	min-height:0;border-radius:3px;box-shadow:none;
+}
+body.ag-portal-active .modal .control-label{
+	color:#657087;font-size:11px;font-weight:700;margin-bottom:6px;
+}
+
+/* v20260928-prod-hhmm - every Frappe control this workspace puts on screen carries a box.
+   Frappe's own rule is `.form-control { border: none }`, and a Link or Data control
+   shows a plain .control-value until it is clicked - so on a white dialog an empty
+   field was nothing at all and only the focused one had an outline.
+
+   The colours are literal on purpose. --ag-border is declared on .agriventure-app, and
+   a dialog is appended to <body>, outside it: `solid var(--ag-border)` there is an
+   undefined value, which drops the whole declaration however specific the rule is. */
+body.ag-portal-active .frappe-control .form-control,
+body.ag-portal-active .frappe-control .input-with-feedback,
+body.ag-portal-active .frappe-control select,
+body.ag-portal-active .frappe-control textarea,
+body.ag-portal-active .frappe-control .awesomplete input{
+	border:1px solid #dfe3eb!important;border-radius:8px!important;
+	min-height:36px!important;background:#fff!important;box-shadow:none!important;
+}
+body.ag-portal-active .frappe-control .form-control:focus,
+body.ag-portal-active .frappe-control .input-with-feedback:focus,
+body.ag-portal-active .frappe-control select:focus,
+body.ag-portal-active .frappe-control textarea:focus,
+body.ag-portal-active .frappe-control .awesomplete input:focus{
+	border-color:#aaa0fa!important;box-shadow:0 0 0 3px rgba(91,69,232,.08)!important;
+}
+/* a value shown in place of an input is still a box, just a quieter one */
+body.ag-portal-active .frappe-control .control-value,
+body.ag-portal-active .frappe-control .like-disabled-input{
+	border:1px solid #eceef3!important;border-radius:8px!important;
+	min-height:36px!important;background:#f7f8fa!important;padding:7px 11px!important;
+}
+/* none of this belongs on a tick box or a button */
+body.ag-portal-active .frappe-control input[type=checkbox],
+body.ag-portal-active .frappe-control input[type=radio]{
+	border-radius:3px!important;min-height:0!important;padding:0!important;
+}
+body.ag-portal-active .frappe-control .btn{
+	min-height:0!important;background:inherit!important;
+}
+body.ag-portal-active .modal .control-label{
+	color:#657087;font-size:11px;font-weight:700;margin-bottom:6px;
+}
+
+/* v20260929-prod-autoscan - the box to stand in. Colours are literal: this sits inside a dialog,
+   outside .agriventure-app, where --ag-* is not defined. */
+.ag-face-stage{position:relative;display:block;line-height:0}
+.ag-face-stage video{display:block;width:100%;border-radius:10px;background:#000}
+.ag-face-guide{position:absolute;left:22%;top:13%;width:56%;height:70%;pointer-events:none}
+.ag-face-guide i{
+	position:absolute;width:26px;height:26px;border:3px solid rgba(255,255,255,.8);
+	border-radius:5px;transition:border-color .15s ease;
+}
+.ag-face-guide i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0}
+.ag-face-guide i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0}
+.ag-face-guide i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0}
+.ag-face-guide i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0}
+.ag-face-guide[data-state=busy] i{border-color:#f0a020}
+.ag-face-guide[data-state=ready] i{border-color:#18b26b}
+.ag-face-auto{
+	display:flex;align-items:center;gap:8px;margin-top:10px;
+	font-size:13px;font-weight:600;color:#4c566d;
+}
+.ag-face-auto input{width:16px;height:16px;margin:0}
